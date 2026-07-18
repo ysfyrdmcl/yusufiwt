@@ -110,6 +110,12 @@ public actor CompanionRelayClient {
         try await performWithoutBody(request)
     }
 
+    public func deleteAccount() async throws {
+        let request = try makeRequest(path: "v1/account", method: "DELETE")
+        try await performWithoutBody(request)
+        accessToken = nil
+    }
+
     public func registerPushToken(id: UUID, token: String, environment: String) async throws {
         var request = try makeRequest(path: "v1/push/tokens", method: "POST")
         request.httpBody = try CompanionCoding.makeEncoder().encode(

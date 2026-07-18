@@ -2841,6 +2841,11 @@ Tekrarlanabilir ve doğrulanabilir dağıtım sürecini kurmak.
 
 ## Faz 17 — Beta, launch ve operasyon
 
+**Uygulama durumu (2026-07-18):** Kod ve operasyon sözleşmeleri tamamlandı;
+korumalı Apple servisleri, fiziksel cihazlar ve canlı operasyon ortamı gerektiren
+1.0 kanıtları exact release commit için bekliyor. Ayrıntı:
+`Docs/PHASE_17_IMPLEMENTATION_REPORT.md`.
+
 ### Amaç
 
 Ürünü kontrollü beta ile doğrulayıp 1.0'a çıkarmak.

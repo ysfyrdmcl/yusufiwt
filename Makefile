@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: bootstrap generate test contract-test swift-test relay-test persistence-performance xcode-test lint release-verify clean
+.PHONY: bootstrap generate test contract-test swift-test relay-test persistence-performance xcode-test lint release-verify operations-verify clean
 
 bootstrap:
 	./Scripts/bootstrap.sh
@@ -35,6 +35,10 @@ lint:
 
 release-verify:
 	./Tests/Contracts/test_phase16_contract.sh
+	./Tests/Contracts/test_phase17_contract.sh
+
+operations-verify:
+	ruby Scripts/verify_phase17.rb --structural
 
 clean:
 	rm -rf .build AgentControl.xcodeproj

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "releaseCommit": "",
+  "version": "1.0.0",
+  "buildNumber": "",
+  "gates": [
+    {"id": "p0_p1_complete", "status": "pending", "evidence": ""},
+    {"id": "adapter_matrix_published", "status": "pending", "evidence": ""},
+    {"id": "local_only_without_account", "status": "pending", "evidence": ""},
+    {"id": "companion_e2e_security", "status": "pending", "evidence": ""},
+    {"id": "macos_notarized_stable", "status": "pending", "evidence": ""},
+    {"id": "ios_production_review_ready", "status": "pending", "evidence": ""},
+    {"id": "no_critical_or_high_bugs", "status": "pending", "evidence": ""},
+    {"id": "diagnostic_and_recovery_tools", "status": "pending", "evidence": ""}
+  ]
+}

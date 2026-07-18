@@ -358,6 +358,31 @@ extension CompanionAppModel {
             message = error.localizedDescription
         }
     }
+
+    func deleteAccount() async {
+        do {
+            guard let relay else { throw CompanionUIError.signInRequired }
+            try await relay.deleteAccount()
+            try? keyStore.delete(account: CompanionRuntimeConfiguration.secureStateAccount)
+            if let url = localStateURL() {
+                try? FileManager.default.removeItem(at: url)
+            }
+            await surfaces.clearSelection()
+            localState = CompanionLocalState()
+            secureState = nil
+            self.relay = nil
+            outboxActor = CompanionDecisionOutbox()
+            inbox = []
+            sessions = []
+            outbox = []
+            devices = []
+            signedIn = false
+            paired = false
+            pinnedSessionID = nil
+        } catch {
+            message = String(localized: "settings.deleteAccountFailed")
+        }
+    }
 }
 
 private extension CompanionAppModel {

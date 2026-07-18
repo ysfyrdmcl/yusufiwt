@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "flags": [
+    {
+      "id": "pairing",
+      "environmentVariable": "EMERGENCY_DISABLE_PAIRING",
+      "default": false,
+      "effect": "Reject new and completing pairing ceremonies; existing authenticated devices remain usable."
+    },
+    {
+      "id": "envelope_submission",
+      "environmentVariable": "EMERGENCY_DISABLE_ENVELOPE_SUBMISSION",
+      "default": false,
+      "effect": "Reject new encrypted envelopes while read, acknowledgment, and data deletion remain available."
+    },
+    {
+      "id": "apns",
+      "environmentVariable": "EMERGENCY_DISABLE_APNS",
+      "default": false,
+      "effect": "Stop notification hints; authenticated pending fetch remains authoritative."
+    },
+    {
+      "id": "live_activities",
+      "environmentVariable": "EMERGENCY_DISABLE_LIVE_ACTIVITIES",
+      "default": false,
+      "effect": "Reject Live Activity updates without disabling normal encrypted relay delivery."
+    }
+  ]
+}

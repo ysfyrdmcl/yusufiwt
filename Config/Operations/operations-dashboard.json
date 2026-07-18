@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "title": "AgentControl 1.0 Operations",
+  "refreshSeconds": 60,
+  "dataSources": {
+    "clientCrashes": "App Store Connect and Xcode Organizer",
+    "relay": "Prometheus scrape of authenticated /internal/metrics",
+    "apns": "Relay Prometheus counters"
+  },
+  "panels": [
+    {
+      "id": "crash_free_sessions",
+      "signal": "crash",
+      "title": "Crash-free sessions by build",
+      "query": "App Store Connect > Metrics > Crashes > version and build",
+      "warning": "< 99.8% over 24h",
+      "critical": "< 99.5% over 1h"
+    },
+    {
+      "id": "relay_availability",
+      "signal": "relay",
+      "title": "Relay availability and 5xx ratio",
+      "query": "sum(rate(agentcontrol_relay_http_requests_total{status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(agentcontrol_relay_http_requests_total[5m])), 1)",
+      "warning": "> 1% for 10m",
+      "critical": "> 5% for 5m"
+    },
+    {
+      "id": "apns_failures",
+      "signal": "apns",
+      "title": "APNs retryable and permanent failures",
+      "query": "sum by (channel,result) (rate(agentcontrol_relay_apns_delivery_total{result=~\"retryable|permanent_failure\"}[5m]))",
+      "warning": "> 2% for 15m",
+      "critical": "> 10% for 5m"
+    },
+    {
+      "id": "invalid_tokens",
+      "signal": "apns",
+      "title": "APNs invalid-token rate",
+      "query": "sum(rate(agentcontrol_relay_apns_delivery_total{result=\"invalid_token\"}[15m]))",
+      "warning": "3x seven-day baseline",
+      "critical": "10x seven-day baseline"
+    }
+  ]
+}

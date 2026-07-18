@@ -401,3 +401,27 @@ private func signedEnvelope(
     #expect(data.range(of: Data("command".utf8)) == nil)
     #expect(data.range(of: Data("project".utf8)) == nil)
 }
+
+@Test func accountDeletionCascadesRelayDataAndInvalidatesTokens() async throws {
+    try await withApp(configure: configuredApp) { app in
+        let mac = TestDevice(role: .localMac)
+        let phone = TestDevice(role: .iPhone)
+        let macToken = try await authenticate(mac, on: app)
+        let phoneToken = try await authenticate(phone, on: app)
+
+        try await app.testing().test(
+            .DELETE, "/v1/account", headers: bearer(phoneToken.accessToken)
+        ) { response in
+            #expect(response.status == .noContent)
+        }
+        #expect(try await UserModel.query(on: app.db).count() == 0)
+        #expect(try await DeviceModel.query(on: app.db).count() == 0)
+        #expect(try await RefreshTokenModel.query(on: app.db).count() == 0)
+
+        try await app.testing().test(
+            .GET, "/v1/devices", headers: bearer(macToken.accessToken)
+        ) { response in
+            #expect(response.status == .unauthorized)
+        }
+    }
+}

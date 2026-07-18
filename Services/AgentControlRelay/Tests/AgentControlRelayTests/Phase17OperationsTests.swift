@@ -8,7 +8,7 @@ struct Phase17OperationsTests {
         let policy = EmergencyDisablePolicy(environment: [
             "EMERGENCY_DISABLE_PAIRING": "1",
             "EMERGENCY_DISABLE_APNS": "true",
-            "EMERGENCY_DISABLE_ENVELOPE_SUBMISSION": "0",
+            "EMERGENCY_DISABLE_ENVELOPE_SUBMISSION": "0"
         ])
 
         #expect(policy.pairing)

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "gates": [
+    {"id": "p0_p1_complete", "required": true},
+    {"id": "adapter_matrix_published", "required": true},
+    {"id": "local_only_without_account", "required": true},
+    {"id": "companion_e2e_security", "required": true},
+    {"id": "macos_notarized_stable", "required": true},
+    {"id": "ios_production_review_ready", "required": true},
+    {"id": "no_critical_or_high_bugs", "required": true},
+    {"id": "diagnostic_and_recovery_tools", "required": true}
+  ]
+}

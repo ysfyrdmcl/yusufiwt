@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "profile": "internal_alpha",
+  "enabled": [
+    "automatic_updates",
+    "companion_relay",
+    "companion_remote_decisions",
+    "live_activities",
+    "managed_codex",
+    "provider_hooks",
+    "push_notifications",
+    "redacted_diagnostic_feedback",
+    "watch_companion",
+    "widgets"
+  ],
+  "emergencyDisabled": []
+}

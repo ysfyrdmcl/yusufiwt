@@ -6,6 +6,7 @@ struct DevicePairingController: RouteCollection {
         routes.post("macs", "register", use: registerMac)
         routes.get("devices", use: listDevices)
         routes.delete("devices", ":id", use: revokeDevice)
+        routes.delete("account", use: deleteAccount)
         routes.post("pairing", "sessions", use: createPairing)
         routes.post("pairing", "sessions", ":id", "complete", use: completePairing)
     }
@@ -42,7 +43,29 @@ struct DevicePairingController: RouteCollection {
         return .noContent
     }
 
+    private func deleteAccount(request: Request) async throws -> HTTPStatus {
+        let auth = try request.auth.require(AuthenticatedDevice.self)
+        guard let user = try await UserModel.find(auth.userID, on: request.db) else {
+            throw Abort(.notFound)
+        }
+        let deviceIDs = try await DeviceModel.query(on: request.db)
+            .filter(\.$userID == auth.userID)
+            .all()
+            .compactMap(\.id)
+        try await request.db.transaction { database in
+            try await user.delete(on: database)
+        }
+        for deviceID in deviceIDs {
+            await request.application.socketHub.disconnect(deviceID: deviceID, close: true)
+            await request.application.presenceProvider.markOffline(deviceID: deviceID)
+        }
+        return .noContent
+    }
+
     private func createPairing(request: Request) async throws -> PairingSessionResponse {
+        guard !request.application.emergencyDisablePolicy.pairing else {
+            throw Abort(.serviceUnavailable, reason: "Pairing is temporarily disabled")
+        }
         let auth = try request.auth.require(AuthenticatedDevice.self)
         guard auth.role == .localMac else { throw Abort(.forbidden) }
         let input = try request.content.decode(CreatePairingRequest.self)
@@ -57,6 +80,9 @@ struct DevicePairingController: RouteCollection {
     }
 
     private func completePairing(request: Request) async throws -> PairingSessionResponse {
+        guard !request.application.emergencyDisablePolicy.pairing else {
+            throw Abort(.serviceUnavailable, reason: "Pairing is temporarily disabled")
+        }
         let auth = try request.auth.require(AuthenticatedDevice.self)
         guard auth.role != .localMac, let id = request.parameters.get("id", as: UUID.self),
               let model = try await PairingSessionModel.find(id, on: request.db),

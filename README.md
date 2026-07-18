@@ -20,6 +20,9 @@ diagnostics. Phase 6 adds lossless managed hook configuration and normalized
 Codex, Claude Code, Gemini CLI, and generic monitoring adapters. Phase 7 adds
 the native menu bar, multi-display floating panel, dashboard, inbox, session
 detail, reconnect-safe UI store, keyboard operation, and English/Turkish UI.
+Phases 8–17 add decision UX, operations/navigation, encrypted companion
+surfaces, hardening, release pipelines, privacy-safe support, account deletion,
+emergency controls, and the evidence-backed 1.0 release gate.
 
 ```sh
 swift run agentcontrol-hook doctor

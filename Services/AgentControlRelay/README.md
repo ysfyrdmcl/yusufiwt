@@ -20,4 +20,7 @@ For Swift tests, run `swift test --disable-sandbox`. Tests use in-memory SQLite 
 - Live Activity tokens are encrypted at rest, scoped to one iPhone/session, expire within eight hours and use `APNS_LIVE_ACTIVITY_TOPIC`; update payloads contain only state and timestamps.
 - WebSocket delivery is an optimization. Clients always reconcile with `GET /v1/envelopes/pending?after=<sequence>`.
 - Ciphertext is deleted after acknowledgment/expiry by retention cleanup. Database backups remain encrypted at rest and follow the same short retention policy.
+- `DELETE /v1/account` cascades devices, credentials, push tokens, pairing sessions and pending ciphertext, then closes active sockets.
+- `/internal/metrics` exists only with `METRICS_BEARER_TOKEN`; its bounded labels contain no user, device, token, envelope or payload values.
+- Pairing, envelope submission, APNs and Live Activities have independent default-off emergency flags in `Config/Operations/emergency-disable.json`.
 - Never enable request-body logging. Authorization, refresh tokens, APNs tokens, database URLs and Apple identity tokens must be redacted by the platform log sink.

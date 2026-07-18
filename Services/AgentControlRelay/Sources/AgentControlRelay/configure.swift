@@ -11,6 +11,7 @@ public func configure(_ application: Application) async throws {
     application.storage[RateLimiterKey.self] = SlidingWindowRateLimiter()
     application.storage[PushTokenVaultKey.self] = PushTokenVault(secret: config.tokenSecret)
     application.storage[SocketHubKey.self] = RelaySocketHub()
+    application.operationalMetrics = RelayOperationalMetrics()
     application.pushProvider = DisabledPushProvider()
     application.liveActivityPushProvider = DisabledLiveActivityPushProvider()
     let memoryEphemeral = MemoryPresenceProvider()
@@ -18,6 +19,8 @@ public func configure(_ application: Application) async throws {
     application.transientEnvelopeQueue = memoryEphemeral
 
     let values = ProcessInfo.processInfo.environment
+    application.emergencyDisablePolicy = EmergencyDisablePolicy(environment: values)
+    application.metricsAccessPolicy = MetricsAccessPolicy(token: values["METRICS_BEARER_TOKEN"])
     try await configurePushProvider(on: application, values: values)
     try configureDatabase(on: application, values: values)
     try configureRedis(on: application, values: values, config: config)
@@ -26,6 +29,7 @@ public func configure(_ application: Application) async throws {
     application.migrations.add(CreateLiveActivityTokenSchema())
     try await application.autoMigrate()
 
+    application.middleware.use(OperationalMetricsMiddleware())
     application.middleware.use(RateLimitMiddleware())
     application.middleware.use(MutationIdempotencyMiddleware(store: MutationIdempotencyStore()))
     try application.register(collection: AuthController())
@@ -41,6 +45,7 @@ public func configure(_ application: Application) async throws {
         _ = try await UserModel.query(on: request.db).count()
         return .ok
     }
+    configureOperationalMetrics(on: application)
     configureWebSocket(on: application)
     application.lifecycle.use(EnvelopeRetentionLifecycle(hours: config.dataRetentionHours))
 }

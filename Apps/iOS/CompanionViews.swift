@@ -579,6 +579,7 @@ private struct HistoryView: View {
 private struct CompanionSettingsView: View {
     @ObservedObject var model: CompanionAppModel
     @State private var revokeCandidate: CompanionDeviceRecord?
+    @State private var confirmsAccountDeletion = false
 
     var body: some View {
         NavigationStack {
@@ -594,23 +595,23 @@ private struct CompanionSettingsView: View {
                 }
                 Section(String(localized: "settings.devices")) {
                     ForEach(model.devices) { device in
-                        HStack {
-                            Image(systemName: device.role == .localMac ? "macbook" : "iphone")
-                            VStack(alignment: .leading) {
-                                Text(device.displayName)
-                                Text(device.role.rawValue).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button(String(localized: "settings.revoke"), role: .destructive) {
-                                revokeCandidate = device
-                            }
-                            .font(.caption)
+                        CompanionDeviceSettingsRow(device: device) {
+                            revokeCandidate = device
                         }
                     }
                 }
                 Section {
                     Text(String(localized: "settings.e2e"))
                         .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section {
+                    Button(String(localized: "settings.deleteAccount"), role: .destructive) {
+                        confirmsAccountDeletion = true
+                    }
+                } header: {
+                    Text(String(localized: "settings.account"))
+                } footer: {
+                    Text(String(localized: "settings.deleteAccountHelp"))
                 }
             }
             .navigationTitle(String(localized: "settings.title"))
@@ -627,6 +628,34 @@ private struct CompanionSettingsView: View {
                     Task { await model.revoke(device) }
                 }
             }
+            .confirmationDialog(
+                String(localized: "settings.deleteAccountConfirm"),
+                isPresented: $confirmsAccountDeletion,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "settings.deleteAccount"), role: .destructive) {
+                    Task { await model.deleteAccount() }
+                }
+                Button(String(localized: "common.cancel"), role: .cancel) {}
+            }
+        }
+    }
+}
+
+private struct CompanionDeviceSettingsRow: View {
+    let device: CompanionDeviceRecord
+    let revoke: () -> Void
+
+    var body: some View {
+        HStack {
+            Image(systemName: device.role == .localMac ? "macbook" : "iphone")
+            VStack(alignment: .leading) {
+                Text(device.displayName)
+                Text(device.role.rawValue).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(String(localized: "settings.revoke"), role: .destructive, action: revoke)
+                .font(.caption)
         }
     }
 }

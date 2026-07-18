@@ -14,6 +14,9 @@ struct EnvelopeController: RouteCollection {
     }
 
     private func submit(request: Request) async throws -> EnvelopeAcceptedResponse {
+        guard !request.application.emergencyDisablePolicy.envelopeSubmission else {
+            throw Abort(.serviceUnavailable, reason: "Envelope submission is temporarily disabled")
+        }
         let auth = try request.auth.require(AuthenticatedDevice.self)
         let input = try request.content.decode(RelayEnvelopeDTO.self)
         let config = request.application.relayConfiguration
@@ -133,6 +136,9 @@ struct EnvelopeController: RouteCollection {
     }
 
     private func updateLiveActivity(request: Request) async throws -> HTTPStatus {
+        guard !request.application.emergencyDisablePolicy.liveActivities else {
+            throw Abort(.serviceUnavailable, reason: "Live Activities are temporarily disabled")
+        }
         let auth = try request.auth.require(AuthenticatedDevice.self)
         guard auth.role == .localMac else { throw Abort(.forbidden) }
         let input = try request.content.decode(LiveActivityUpdateRequest.self)
@@ -159,6 +165,7 @@ struct EnvelopeController: RouteCollection {
         else { throw Abort(.notFound) }
         let token = try request.application.pushTokenVault.open(model.tokenCiphertext)
         let result = await request.application.liveActivityPushProvider.sendLiveActivityUpdate(input, to: token)
+        await request.application.operationalMetrics.recordAPNS(result, channel: .liveActivity)
         switch result {
         case .accepted:
             return .accepted
@@ -182,12 +189,15 @@ struct EnvelopeController: RouteCollection {
     }
 
     private func sendPushHint(for envelope: RelayEnvelopeDTO, recipient: DeviceModel, request: Request) async throws {
-        guard recipient.role != ServerDeviceRole.localMac.rawValue else { return }
+        guard recipient.role != ServerDeviceRole.localMac.rawValue,
+              !request.application.emergencyDisablePolicy.apns
+        else { return }
         for model in try await PushTokenModel.query(on: request.db).filter(\.$deviceID == envelope.recipientDeviceID).all() {
             let token = try request.application.pushTokenVault.open(model.tokenCiphertext)
             let result = await request.application.pushProvider.sendEnvelopeHint(
                 envelopeID: envelope.envelopeID, category: envelope.kind.rawValue, to: token
             )
+            await request.application.operationalMetrics.recordAPNS(result, channel: .notification)
             if result == .invalidToken {
                 try await model.delete(on: request.db)
             }
@@ -208,8 +218,11 @@ actor RelaySocketHub {
         sockets[deviceID] = SocketBox(socket)
     }
 
-    func disconnect(deviceID: UUID) {
-        sockets.removeValue(forKey: deviceID)
+    func disconnect(deviceID: UUID, close: Bool = false) async {
+        let box = sockets.removeValue(forKey: deviceID)
+        if close, let box {
+            try? await box.socket.close(code: .normalClosure)
+        }
     }
 
     func notify(deviceID: UUID, envelopeID: UUID) async {

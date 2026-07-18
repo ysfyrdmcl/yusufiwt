@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "publishedAt": "2026-07-18",
+  "localOnlyMode": {
+    "accountRequired": false,
+    "status": "verified",
+    "evidence": [
+      "Tests/Contracts/test_phase6_contract.sh",
+      "Packages/AgentControlKit/Tests/AgentHookKitTests/ProviderIntegrationTests.swift"
+    ]
+  },
+  "adapters": [
+    {
+      "id": "codex",
+      "versions": ["0.x", "1.x"],
+      "status": "beta",
+      "modes": ["managed", "hook"],
+      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests"],
+      "fallback": "monitor_only",
+      "evidence": [
+        "Packages/AgentControlKit/Tests/AgentCodexAdapterTests",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures"
+      ]
+    },
+    {
+      "id": "claude",
+      "versions": ["1.x", "2.x"],
+      "status": "beta",
+      "modes": ["hook"],
+      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests", "answer_questions"],
+      "fallback": "monitor_only",
+      "evidence": [
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/ProviderHookMapperTests.swift",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures"
+      ]
+    },
+    {
+      "id": "gemini",
+      "versions": ["0.x", "1.x"],
+      "status": "beta",
+      "modes": ["hook"],
+      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests"],
+      "fallback": "monitor_only",
+      "evidence": [
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/ProviderHookMapperTests.swift",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures"
+      ]
+    }
+  ]
+}

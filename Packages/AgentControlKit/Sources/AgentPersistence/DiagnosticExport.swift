@@ -5,6 +5,22 @@ public enum DiagnosticExportError: Error, Sendable, Equatable {
     case encodingFailed
 }
 
+public enum DiagnosticFeedbackError: Error, Sendable, Equatable {
+    case consentRequired
+    case invalidApplicationIdentity
+    case packagingFailed
+}
+
+public struct DiagnosticFeedbackConsent: Sendable, Equatable {
+    public let confirmed: Bool
+    public let includePrivateMetadata: Bool
+
+    public init(confirmed: Bool, includePrivateMetadata: Bool = false) {
+        self.confirmed = confirmed
+        self.includePrivateMetadata = includePrivateMetadata
+    }
+}
+
 public enum RedactedDiagnosticExporter {
     public static func export(
         report: DiagnosticsReport,
@@ -53,6 +69,50 @@ public enum RedactedDiagnosticExporter {
             )
         }
         return output
+    }
+}
+
+/// Builds a reviewable, redacted file for user-initiated support submission.
+/// It performs no network request and never includes sensitive or secret attachments.
+public enum DiagnosticFeedbackPackageBuilder {
+    public static func make(
+        report: DiagnosticsReport,
+        attachments: [DiagnosticAttachment] = [],
+        summary: String,
+        consent: DiagnosticFeedbackConsent,
+        applicationVersion: String,
+        buildNumber: String,
+        supportID: UUID = UUID(),
+        createdAt: Date = Date()
+    ) throws -> Data {
+        guard consent.confirmed else { throw DiagnosticFeedbackError.consentRequired }
+        guard !applicationVersion.isEmpty, !buildNumber.isEmpty else {
+            throw DiagnosticFeedbackError.invalidApplicationIdentity
+        }
+        do {
+            let diagnosticData = try RedactedDiagnosticExporter.export(
+                report: report,
+                attachments: attachments,
+                includePrivateMetadata: consent.includePrivateMetadata
+            )
+            let diagnostics = try JSONSerialization.jsonObject(with: diagnosticData)
+            let formatter = ISO8601DateFormatter()
+            let package: [String: Any] = [
+                "formatVersion": 1,
+                "supportID": supportID.uuidString.lowercased(),
+                "createdAt": formatter.string(from: createdAt),
+                "applicationVersion": RedactedDiagnosticExporter.sanitize(applicationVersion),
+                "buildNumber": RedactedDiagnosticExporter.sanitize(buildNumber),
+                "summary": RedactedDiagnosticExporter.sanitize(summary),
+                "privateMetadataIncluded": consent.includePrivateMetadata,
+                "diagnostics": diagnostics
+            ]
+            return try JSONSerialization.data(withJSONObject: package, options: [.prettyPrinted, .sortedKeys])
+        } catch let error as DiagnosticFeedbackError {
+            throw error
+        } catch {
+            throw DiagnosticFeedbackError.packagingFailed
+        }
     }
 }
 
