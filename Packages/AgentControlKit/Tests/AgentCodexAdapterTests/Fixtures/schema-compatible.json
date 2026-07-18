@@ -1,0 +1,1 @@
+{"oneOf":["initialize","thread/start","turn/start","turn/interrupt","item/commandExecution/requestApproval","item/fileChange/requestApproval","item/started","item/completed","turn/started","turn/completed","serverRequest/resolved"]}

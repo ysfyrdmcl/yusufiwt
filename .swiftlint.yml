@@ -1,0 +1,17 @@
+strict: true
+included:
+  - Apps
+  - Services
+  - Packages
+excluded:
+  - .build
+  - AgentControl.xcodeproj
+disabled_rules:
+  - trailing_comma
+opt_in_rules:
+  - empty_count
+  - fatal_error_message
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - sorted_imports
+line_length: 160

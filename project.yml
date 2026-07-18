@@ -1,0 +1,189 @@
+name: AgentControl
+options:
+  bundleIdPrefix: com.yusuf.agentcontrol
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+    watchOS: "10.0"
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Staging: release
+  Release: release
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Staging: Config/Staging.xcconfig
+  Release: Config/Release.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CLANG_ENABLE_MODULES: YES
+    CODE_SIGN_STYLE: Automatic
+    GENERATE_INFOPLIST_FILE: YES
+packages:
+  AgentControlKit:
+    path: Packages/AgentControlKit
+targets:
+  AgentControlMac:
+    type: application
+    platform: macOS
+    sources:
+      - Apps/macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(MAC_BUNDLE_IDENTIFIER)
+        PRODUCT_NAME: AgentControl
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+    entitlements:
+      path: Config/Entitlements/AgentControlMac.entitlements
+    dependencies:
+      - target: AgentControlHelper
+      - package: AgentControlKit
+        product: AgentLocalIPC
+      - package: AgentControlKit
+        product: AgentMacUI
+    postBuildScripts:
+      - name: Embed LaunchAgent Helper
+        script: |
+          set -eu
+          helper_destination="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/MacOS/AgentControlHelper"
+          plist_directory="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
+          mkdir -p "$plist_directory"
+          cp "$BUILT_PRODUCTS_DIR/AgentControlHelper" "$helper_destination"
+          cp "$SRCROOT/Config/LaunchAgents/com.yusuf.agentcontrol.helper.plist" "$plist_directory/com.yusuf.agentcontrol.helper.plist"
+          chmod 755 "$helper_destination"
+          chmod 644 "$plist_directory/com.yusuf.agentcontrol.helper.plist"
+        inputFiles:
+          - $(BUILT_PRODUCTS_DIR)/AgentControlHelper
+          - $(SRCROOT)/Config/LaunchAgents/com.yusuf.agentcontrol.helper.plist
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/AgentControlHelper
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/com.yusuf.agentcontrol.helper.plist
+  AgentControliOS:
+    type: application
+    platform: iOS
+    sources:
+      - Apps/iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_IDENTIFIER)
+        PRODUCT_NAME: AgentControl
+        TARGETED_DEVICE_FAMILY: "1,2"
+    entitlements:
+      path: Config/Entitlements/AgentControliOS.entitlements
+  AgentControlWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - Apps/watchOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(WATCH_BUNDLE_IDENTIFIER)
+        PRODUCT_NAME: AgentControl
+        SKIP_INSTALL: YES
+    entitlements:
+      path: Config/Entitlements/AgentControlWatch.entitlements
+  NotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Apps/Extensions/NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(NOTIFICATION_SERVICE_BUNDLE_IDENTIFIER)
+        SKIP_INSTALL: YES
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.usernotifications.service
+        INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: Config/Entitlements/NotificationService.entitlements
+  AgentLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Apps/Extensions/AgentLiveActivity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(LIVE_ACTIVITY_BUNDLE_IDENTIFIER)
+        SKIP_INSTALL: YES
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Config/Entitlements/LiveActivity.entitlements
+  AgentWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Apps/Extensions/AgentWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(WIDGETS_BUNDLE_IDENTIFIER)
+        SKIP_INSTALL: YES
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  AgentControlHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - Services/AgentControlHelper
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(HELPER_BUNDLE_IDENTIFIER)
+        PRODUCT_NAME: AgentControlHelper
+    dependencies:
+      - package: AgentControlKit
+        product: AgentLocalIPC
+    entitlements:
+      path: Config/Entitlements/AgentControlHelper.entitlements
+  AgentControlHook:
+    type: tool
+    platform: macOS
+    sources:
+      - Tools/AgentControlHook
+    settings:
+      base:
+        PRODUCT_NAME: agentcontrol-hook
+    dependencies:
+      - package: AgentControlKit
+        product: AgentHookKit
+      - package: AgentControlKit
+        product: AgentLocalIPC
+      - package: AgentControlKit
+        product: AgentProtocol
+  FakeAgentSimulator:
+    type: tool
+    platform: macOS
+    sources:
+      - Tools/FakeAgentSimulator
+    settings:
+      base:
+        PRODUCT_NAME: fake-agent-simulator
+    dependencies:
+      - package: AgentControlKit
+        product: AgentHookKit
+      - package: AgentControlKit
+        product: AgentLocalIPC
+  ProtocolInspector:
+    type: tool
+    platform: macOS
+    sources:
+      - Tools/ProtocolInspector
+    settings:
+      base:
+        PRODUCT_NAME: protocol-inspector
+    dependencies:
+      - package: AgentControlKit
+        product: AgentHookKit
+      - package: AgentControlKit
+        product: AgentLocalIPC
+schemes:
+  AgentControlMac:
+    build:
+      targets:
+        AgentControlMac: all
+  AgentControliOS:
+    build:
+      targets:
+        AgentControliOS: all
+  AgentControlWatch:
+    build:
+      targets:
+        AgentControlWatch: all

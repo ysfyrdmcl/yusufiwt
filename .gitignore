@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+DerivedData/
+AgentControl.xcodeproj/
+Config/Local.xcconfig
+.env
+*.p8
+*.p12
+*.key
+xcuserdata/
+

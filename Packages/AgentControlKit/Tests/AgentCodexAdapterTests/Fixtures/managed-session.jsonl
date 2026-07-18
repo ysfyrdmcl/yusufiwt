@@ -1,0 +1,8 @@
+{"id":1,"result":{"codexHome":"/tmp/codex","platformFamily":"unix","platformOs":"macos","userAgent":"codex-cli/0.145.0"}}
+{"id":2,"result":{"thread":{"id":"thread-1"}}}
+{"method":"turn/started","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"inProgress"}}}
+{"method":"item/started","params":{"threadId":"thread-1","turnId":"turn-1","startedAtMs":1700000000000,"item":{"type":"commandExecution","id":"item-1","command":"swift test","cwd":"/workspace","status":"inProgress"}}}
+{"id":91,"method":"item/commandExecution/requestApproval","params":{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","startedAtMs":1700000000000,"command":"swift test","cwd":"/workspace"}}
+{"method":"serverRequest/resolved","params":{"threadId":"thread-1","requestId":91}}
+{"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","completedAtMs":1700000001000,"item":{"type":"commandExecution","id":"item-1","command":"swift test","cwd":"/workspace","status":"completed"}}}
+{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}}

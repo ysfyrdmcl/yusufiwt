@@ -1,0 +1,1 @@
+{"session_id":"claude-session","cwd":"/private/tmp/work","hook_event_name":"PermissionRequest","permission_mode":"default","tool_name":"Edit","tool_use_id":"claude-tool-1","tool_input":{"file_path":"/private/tmp/work/Sources/App.swift"}}

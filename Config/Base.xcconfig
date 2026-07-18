@@ -1,0 +1,15 @@
+AGENTCONTROL_ENV = base
+MAC_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.mac
+IOS_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.ios
+WATCH_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.watch
+HELPER_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.helper
+NOTIFICATION_SERVICE_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.ios.NotificationService
+LIVE_ACTIVITY_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.ios.LiveActivity
+WIDGETS_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.ios.Widgets
+APP_GROUP_ID = group.com.yusuf.agentcontrol
+URL_SCHEME = agentcontrol
+SWIFT_STRICT_CONCURRENCY = complete
+SWIFT_TREAT_WARNINGS_AS_ERRORS = YES
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+AGENTCONTROL_ALLOW_DEBUG_FEATURES = NO
+

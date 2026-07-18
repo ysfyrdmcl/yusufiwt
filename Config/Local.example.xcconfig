@@ -1,0 +1,4 @@
+// Copy to Local.xcconfig for non-secret, machine-local signing settings.
+AGENTCONTROL_TEAM_ID =
+DEVELOPMENT_TEAM = $(AGENTCONTROL_TEAM_ID)
+

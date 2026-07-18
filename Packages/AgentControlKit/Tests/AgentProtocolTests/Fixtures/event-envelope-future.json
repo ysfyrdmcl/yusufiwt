@@ -1,0 +1,2 @@
+{"protocolVersion":1,"eventID":"77777777-7777-7777-7777-777777777777","eventType":"future.providerEvent","source":{"adapterID":"future","adapterVersion":"9.0.0","nodeID":"88888888-8888-8888-8888-888888888888"},"sessionID":"99999999-9999-9999-9999-999999999999","sequence":1,"occurredAt":"2026-07-17T12:00:00Z","receivedAt":"2026-07-17T12:00:00Z","payload":{"newField":{"nested":true}},"privacyClass":"sensitive","correlationID":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","schemaHash":"sha256:future","futureTopLevel":"ignored"}
+

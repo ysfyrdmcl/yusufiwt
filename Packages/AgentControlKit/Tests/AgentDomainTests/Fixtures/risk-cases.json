@@ -1,0 +1,12 @@
+[
+  {"name":"workspace write","expectedLevel":"medium","expectedRemoteApproval":"reviewRequired","action":"modify","path":"/workspace/Sources/A.swift","signals":[]},
+  {"name":"outside workspace","expectedLevel":"high","expectedRemoteApproval":"strongAuthenticationRequired","action":"modify","path":"/tmp/A.swift","signals":[]},
+  {"name":"network","expectedLevel":"high","expectedRemoteApproval":"strongAuthenticationRequired","action":"network","signals":[]},
+  {"name":"privilege escalation","expectedLevel":"critical","expectedRemoteApproval":"forbidden","action":"command","signals":["privilegeEscalation"]},
+  {"name":"unknown shell","expectedLevel":"critical","expectedRemoteApproval":"forbidden","action":"command","signals":["unknownShellComposition"]},
+  {"name":"secret exposure","expectedLevel":"critical","expectedRemoteApproval":"forbidden","action":"network","signals":["secretAccess"]},
+  {"name":"production deploy","expectedLevel":"critical","expectedRemoteApproval":"forbidden","action":"command","signals":["productionDeployment"]},
+  {"name":"force push protected","expectedLevel":"critical","expectedRemoteApproval":"forbidden","action":"command","signals":["forcePushProtectedBranch"]},
+  {"name":"read-only custom","expectedLevel":"low","expectedRemoteApproval":"allowed","action":"read","signals":[]}
+]
+

@@ -1,0 +1,2 @@
+{"protocolVersion":1,"eventID":"33333333-3333-3333-3333-333333333333","eventType":"session.stateChanged","source":{"adapterID":"codex","adapterVersion":"1.0.0","nodeID":"44444444-4444-4444-4444-444444444444","processID":1234},"sessionID":"55555555-5555-5555-5555-555555555555","providerSessionID":"opaque","sequence":42,"occurredAt":"2026-07-17T12:00:00Z","receivedAt":"2026-07-17T12:00:01Z","payload":{"state":"running"},"privacyClass":"privateMetadata","correlationID":"66666666-6666-6666-6666-666666666666","schemaHash":"sha256:test"}
+

@@ -1,0 +1,303 @@
+#if os(macOS)
+    import AgentDomain
+    import AgentPersistence
+    import AgentProtocol
+    import Foundation
+
+    public enum LocalIPCContract {
+        public static let currentVersion: UInt16 = 1
+        public static let maximumFrameSize = 1_048_576
+        public static let magic = Data([0x41, 0x43, 0x49, 0x50]) // ACIP
+        public static let machServiceName = "com.yusuf.agentcontrol.helper.xpc"
+    }
+
+    public enum LocalIPCError: Error, Sendable, Equatable, CustomStringConvertible {
+        case invalidMagic
+        case unsupportedVersion(UInt16)
+        case oversizedFrame(Int)
+        case truncatedFrame
+        case trailingBytes
+        case checksumMismatch
+        case malformedPayload
+        case unauthorizedClient
+        case socketFailure(code: Int32)
+        case unsafeSocketPath
+        case timeout
+        case unavailable
+        case shuttingDown
+
+        public var description: String {
+            switch self {
+            case .invalidMagic: "IPC frame magic is invalid"
+            case let .unsupportedVersion(version): "IPC protocol version \(version) is unsupported"
+            case let .oversizedFrame(size): "IPC frame size \(size) exceeds the limit"
+            case .truncatedFrame: "IPC frame is truncated"
+            case .trailingBytes: "IPC frame contains trailing bytes"
+            case .checksumMismatch: "IPC payload checksum is invalid"
+            case .malformedPayload: "IPC payload is malformed"
+            case .unauthorizedClient: "IPC client is not authorized"
+            case let .socketFailure(code): "Unix socket operation failed with code \(code)"
+            case .unsafeSocketPath: "Unix socket path or ownership is unsafe"
+            case .timeout: "IPC operation timed out"
+            case .unavailable: "Helper is unavailable"
+            case .shuttingDown: "Helper is shutting down"
+            }
+        }
+    }
+
+    public enum SocketMessageType: UInt16, Codable, Sendable {
+        case request = 1
+        case response = 2
+    }
+
+    public struct SocketFrame: Sendable, Equatable {
+        public let protocolVersion: UInt16
+        public let messageType: SocketMessageType
+        public let payload: Data
+
+        public init(
+            protocolVersion: UInt16 = LocalIPCContract.currentVersion,
+            messageType: SocketMessageType,
+            payload: Data
+        ) {
+            self.protocolVersion = protocolVersion
+            self.messageType = messageType
+            self.payload = payload
+        }
+    }
+
+    public enum HelperRequest: Codable, Sendable {
+        case negotiate(supportedVersions: [UInt16])
+        case health
+        case heartbeat
+        case submitEvent(HelperEventSubmission)
+        case requestDecision(HookDecisionRequest)
+        case pendingDecisions
+        case resolveDecision(HookDecisionResolution)
+        case listSessions(limit: Int)
+        case sessionSnapshot(SessionID)
+        case sessionEvents(sessionID: SessionID, limit: Int)
+        case prepareForUpdate
+    }
+
+    public enum HelperResponse: Codable, Sendable, Equatable {
+        case negotiated(version: UInt16)
+        case health(HelperHealth)
+        case heartbeat(HelperHeartbeat)
+        case eventAccepted(EventAppendDisposition)
+        case decision(HookDecisionResult)
+        case pendingDecisions([PendingHookDecision])
+        case decisionResolution(DecisionResolutionDisposition)
+        case sessionList([SessionListItem])
+        case sessionSnapshot(AgentSession?)
+        case sessionEvents([PersistedSessionEvent])
+        case updateHandoff(UpdateHandoff)
+        case registryEvent(RegistryNotification)
+        case neutral(reason: NeutralFallbackReason)
+        case failure(code: String, safeMessage: String)
+    }
+
+    public struct HelperEventSubmission: Codable, Sendable {
+        public let envelope: EventEnvelope
+        public let initialSession: AgentSession
+
+        public init(envelope: EventEnvelope, initialSession: AgentSession) {
+            self.envelope = envelope
+            self.initialSession = initialSession
+        }
+    }
+
+    public enum HookDecisionKind: String, Codable, Sendable, Equatable {
+        case approval
+        case question
+        case plan
+    }
+
+    public struct HookDecisionRequest: Codable, Sendable {
+        public let requestID: UUID
+        public let revision: Int64
+        public let kind: HookDecisionKind
+        public let prompt: String
+        public let choices: [String]
+        public let expiresAt: Date?
+        public let waitTimeoutMilliseconds: Int
+        public let submission: HelperEventSubmission
+
+        public init(
+            requestID: UUID,
+            revision: Int64,
+            kind: HookDecisionKind,
+            prompt: String,
+            choices: [String] = [],
+            expiresAt: Date? = nil,
+            waitTimeoutMilliseconds: Int = 25000,
+            submission: HelperEventSubmission
+        ) {
+            self.requestID = requestID
+            self.revision = revision
+            self.kind = kind
+            self.prompt = prompt
+            self.choices = choices
+            self.expiresAt = expiresAt
+            self.waitTimeoutMilliseconds = waitTimeoutMilliseconds
+            self.submission = submission
+        }
+    }
+
+    public enum HookDecision: Codable, Sendable, Equatable {
+        case approve
+        case deny
+        case answer(String)
+    }
+
+    public struct HookDecisionResult: Codable, Sendable, Equatable {
+        public let requestID: UUID
+        public let revision: Int64
+        public let decision: HookDecision
+
+        public init(requestID: UUID, revision: Int64, decision: HookDecision) {
+            self.requestID = requestID
+            self.revision = revision
+            self.decision = decision
+        }
+    }
+
+    public struct HookDecisionResolution: Codable, Sendable {
+        public let requestID: UUID
+        public let revision: Int64
+        public let decision: HookDecision
+
+        public init(requestID: UUID, revision: Int64, decision: HookDecision) {
+            self.requestID = requestID
+            self.revision = revision
+            self.decision = decision
+        }
+    }
+
+    public struct PendingHookDecision: Codable, Sendable, Equatable {
+        public let requestID: UUID
+        public let sessionID: SessionID
+        public let revision: Int64
+        public let kind: HookDecisionKind
+        public let prompt: String
+        public let choices: [String]
+        public let expiresAt: Date?
+        public let projectName: String?
+        public let projectRootURL: URL?
+        public let terminalContext: TerminalContext?
+        public let privacyClass: PrivacyClass?
+        public let approval: ApprovalRequest?
+        public let question: AgentQuestion?
+        public let planTitle: String?
+
+        public init(request: HookDecisionRequest) {
+            requestID = request.requestID
+            sessionID = request.submission.envelope.sessionID
+            revision = request.revision
+            kind = request.kind
+            prompt = request.prompt
+            choices = request.choices
+            expiresAt = request.expiresAt
+            let submission = request.submission
+            projectName = submission.initialSession.project.name
+            projectRootURL = submission.initialSession.project.rootURL
+            terminalContext = submission.initialSession.terminalContext
+            privacyClass = submission.envelope.privacyClass
+            approval = request.kind == .approval
+                ? Self.decode(ApprovalRequest.self, from: submission.envelope.payload)
+                : nil
+            question = request.kind == .question
+                ? Self.decode(AgentQuestion.self, from: submission.envelope.payload)
+                : nil
+            if request.kind == .plan {
+                planTitle = submission.envelope.payload["title"]?.stringValue ?? request.prompt
+            } else {
+                planTitle = nil
+            }
+        }
+
+        private static func decode<T: Decodable>(_ type: T.Type, from payload: JSONValue) -> T? {
+            guard let data = try? JSONEncoder().encode(payload) else { return nil }
+            return try? JSONDecoder().decode(type, from: data)
+        }
+    }
+
+    public enum DecisionResolutionDisposition: String, Codable, Sendable, Equatable {
+        case accepted
+        case notFound
+        case revisionMismatch
+        case expired
+        case invalidDecision
+    }
+
+    public enum EventAppendDisposition: String, Codable, Sendable, Equatable {
+        case appended
+        case duplicate
+        case recordedWithoutStateChange
+        case rejectedTransition
+        case spooled
+    }
+
+    public enum NeutralFallbackReason: String, Codable, Sendable, Equatable {
+        case helperUnavailable
+        case timeout
+        case unsupportedProtocol
+        case shuttingDown
+    }
+
+    public struct HelperHealth: Codable, Sendable, Equatable {
+        public let protocolVersion: UInt16
+        public let processID: Int32
+        public let uptimeSeconds: TimeInterval
+        public let activeSessionCount: Int
+        public let persistedEventCount: Int
+        public let spoolPendingCount: Int
+        public let pendingDecisionCount: Int?
+        public let socketAcceptingConnections: Bool
+        public let databaseHealthy: Bool
+
+        public init(
+            protocolVersion: UInt16,
+            processID: Int32,
+            uptimeSeconds: TimeInterval,
+            activeSessionCount: Int,
+            persistedEventCount: Int,
+            spoolPendingCount: Int,
+            pendingDecisionCount: Int? = nil,
+            socketAcceptingConnections: Bool,
+            databaseHealthy: Bool
+        ) {
+            self.protocolVersion = protocolVersion
+            self.processID = processID
+            self.uptimeSeconds = uptimeSeconds
+            self.activeSessionCount = activeSessionCount
+            self.persistedEventCount = persistedEventCount
+            self.spoolPendingCount = spoolPendingCount
+            self.pendingDecisionCount = pendingDecisionCount
+            self.socketAcceptingConnections = socketAcceptingConnections
+            self.databaseHealthy = databaseHealthy
+        }
+    }
+
+    public struct HelperHeartbeat: Codable, Sendable, Equatable {
+        public let sequence: UInt64
+        public let emittedAt: Date
+
+        public init(sequence: UInt64, emittedAt: Date) {
+            self.sequence = sequence
+            self.emittedAt = emittedAt
+        }
+    }
+
+    public struct UpdateHandoff: Codable, Sendable, Equatable {
+        public let token: UUID
+        public let preparedAt: Date
+        public let persistedEventCount: Int
+
+        public init(token: UUID, preparedAt: Date, persistedEventCount: Int) {
+            self.token = token
+            self.preparedAt = preparedAt
+            self.persistedEventCount = persistedEventCount
+        }
+    }
+#endif

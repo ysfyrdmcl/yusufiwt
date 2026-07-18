@@ -1,0 +1,13 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "app.name" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AgentControl" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "AgentControl" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
+
