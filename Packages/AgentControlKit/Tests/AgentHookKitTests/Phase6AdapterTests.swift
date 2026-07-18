@@ -5,6 +5,7 @@ import AgentProtocol
 import Foundation
 import Testing
 
+// swiftlint:disable type_body_length function_body_length
 @Suite("Phase 6 provider hook adapters")
 struct Phase6AdapterTests {
     private let now = Date(timeIntervalSince1970: 1_784_320_000)
@@ -190,9 +191,10 @@ struct Phase6AdapterTests {
             now: now
         )
         #expect(mapping.decisionRequest?.kind == .question)
-        #expect(mapping.decisionRequest?.choices == ["Debug", "Release"])
+        #expect(mapping.decisionRequest?.choices.map(\.label) == ["Debug", "Release"])
+        let choiceID = try #require(mapping.decisionRequest?.choices.first?.id)
         let output = mapper.providerOutput(
-            for: .decision(HookDecisionResult(requestID: mapping.decisionRequest?.requestID ?? UUID(), revision: 1, decision: .answer("Debug"))),
+            for: .decision(HookDecisionResult(requestID: mapping.decisionRequest?.requestID ?? UUID(), revision: 1, decision: .answerChoice(id: choiceID))),
             mapping: mapping
         )
         #expect(output["hookSpecificOutput"]?["action"]?.stringValue == "accept")
@@ -209,6 +211,35 @@ struct Phase6AdapterTests {
             now: now
         )
         #expect(secretMapping.decisionRequest == nil)
+
+        let multiInput = JSONValue.object([
+            "session_id": .string("multi-session"), "cwd": .string("/private/tmp/work"),
+            "hook_event_name": .string("Elicitation"), "message": .string("Targets"),
+            "requested_schema": .object([
+                "type": .string("array"),
+                "items": .object(["type": .string("string"), "enum": .array([.string("mac"), .string("ios")])])
+            ])
+        ])
+        let multi = try mapper.map(
+            provider: .claude,
+            input: multiInput,
+            environment: ["AGENTCONTROL_PROVIDER_VERSION": "1.0.0"],
+            now: now
+        )
+        #expect(try PendingHookDecision(request: #require(multi.decisionRequest)).question?.kind == .multiChoice)
+
+        let textInput = JSONValue.object([
+            "session_id": .string("text-session"), "cwd": .string("/private/tmp/work"),
+            "hook_event_name": .string("Elicitation"), "message": .string("Summary"),
+            "requested_schema": .object(["type": .string("string"), "maxLength": .number(12)])
+        ])
+        let text = try mapper.map(
+            provider: .claude,
+            input: textInput,
+            environment: ["AGENTCONTROL_PROVIDER_VERSION": "1.0.0"],
+            now: now
+        )
+        #expect(text.decisionRequest?.maximumAnswerLength == 12)
     }
 
     @Test("Unknown versions and auto-review modes never produce allow decisions")
@@ -276,6 +307,8 @@ struct Phase6AdapterTests {
         return try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: url))
     }
 }
+
+// swiftlint:enable type_body_length function_body_length
 
 private struct FixtureProviderRunner: ProviderCommandRunning {
     let output: String

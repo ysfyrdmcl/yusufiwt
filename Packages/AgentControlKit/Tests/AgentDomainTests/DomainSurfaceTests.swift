@@ -37,12 +37,29 @@ struct DomainSurfaceTests {
         )
         let turn = AgentTurn(id: TurnID(UUID()), sessionID: sessionID, status: .active, startedAt: now)
         let tool = ToolRun(id: ToolRunID(UUID()), sessionID: sessionID, toolName: "read", status: .running)
-        let question = AgentQuestion(id: QuestionID(UUID()), sessionID: sessionID, kind: .choice, prompt: "Choose", choices: ["A"])
+        let question = AgentQuestion(
+            id: QuestionID(UUID()),
+            sessionID: sessionID,
+            kind: .singleChoice,
+            prompt: "Choose",
+            choices: [QuestionChoice(id: "a", label: "A")]
+        )
         #expect(node.isLocal)
         #expect(terminal.processID == 10)
         #expect(turn.status == .active)
         #expect(tool.toolName == "read")
         #expect(question.status == .pending)
+        #expect(question.choices.first?.id == "a")
+    }
+
+    @Test("Question choices encode stable IDs and decode legacy labels")
+    func questionChoiceWireCompatibility() throws {
+        let choice = QuestionChoice(id: "debug", label: "Debug build")
+        let encoded = try JSONEncoder().encode(choice)
+        #expect(String(bytes: encoded, encoding: .utf8)?.contains("debug") == true)
+        let legacy = try JSONDecoder().decode(QuestionChoice.self, from: Data("\"Debug build\"".utf8))
+        #expect(legacy.id.hasPrefix("legacy-"))
+        #expect(legacy.label == "Debug build")
     }
 
     @Test("Action summaries and risk values are Codable")

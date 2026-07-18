@@ -159,7 +159,7 @@
                 let question = AgentQuestion(
                     id: QuestionID(UUID()),
                     sessionID: sessionID,
-                    kind: choices.isEmpty ? .text : .choice,
+                    kind: choices.isEmpty ? .freeText : .singleChoice,
                     prompt: prompt,
                     choices: choices
                 )

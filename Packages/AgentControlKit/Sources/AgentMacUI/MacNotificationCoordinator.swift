@@ -29,9 +29,16 @@
         }
     }
 
+    public enum NotificationAuthorizationState: Sendable, Equatable {
+        case unknown
+        case authorized
+        case denied
+    }
+
     @MainActor
     public final class MacNotificationCoordinator: NSObject, UNUserNotificationCenterDelegate {
         public var responseHandler: (@MainActor @Sendable (MacNotificationResponse) -> Void)?
+        public private(set) var authorizationState: NotificationAuthorizationState = .unknown
 
         private let center: UNUserNotificationCenter
         private var preferences: MacNotificationPreferences
@@ -49,7 +56,13 @@
         public func configure() async {
             center.delegate = self
             center.setNotificationCategories(Self.categories)
-            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+            do {
+                authorizationState = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+                    ? .authorized
+                    : .denied
+            } catch {
+                authorizationState = .denied
+            }
         }
 
         public func updatePreferences(_ value: MacNotificationPreferences) {
@@ -57,6 +70,7 @@
         }
 
         public func reconcile(_ decisions: [PendingHookDecision], now: Date = Date()) async {
+            guard authorizationState != .denied else { return }
             deduplicator.reconcile(active: decisions)
             let activeIdentifiers = Set(decisions.map(Self.identifier))
             let pending = await center.pendingNotificationRequests()

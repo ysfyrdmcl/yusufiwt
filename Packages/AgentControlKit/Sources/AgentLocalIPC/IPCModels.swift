@@ -118,7 +118,8 @@
         public let revision: Int64
         public let kind: HookDecisionKind
         public let prompt: String
-        public let choices: [String]
+        public let choices: [QuestionChoice]
+        public let maximumAnswerLength: Int?
         public let expiresAt: Date?
         public let waitTimeoutMilliseconds: Int
         public let submission: HelperEventSubmission
@@ -128,7 +129,8 @@
             revision: Int64,
             kind: HookDecisionKind,
             prompt: String,
-            choices: [String] = [],
+            choices: [QuestionChoice] = [],
+            maximumAnswerLength: Int? = nil,
             expiresAt: Date? = nil,
             waitTimeoutMilliseconds: Int = 25000,
             submission: HelperEventSubmission
@@ -138,16 +140,69 @@
             self.kind = kind
             self.prompt = prompt
             self.choices = choices
+            self.maximumAnswerLength = maximumAnswerLength
             self.expiresAt = expiresAt
             self.waitTimeoutMilliseconds = waitTimeoutMilliseconds
             self.submission = submission
+        }
+
+        public init(
+            requestID: UUID,
+            revision: Int64,
+            kind: HookDecisionKind,
+            prompt: String,
+            legacyChoiceLabels: [String],
+            maximumAnswerLength: Int? = nil,
+            expiresAt: Date? = nil,
+            waitTimeoutMilliseconds: Int = 25000,
+            submission: HelperEventSubmission
+        ) {
+            self.init(
+                requestID: requestID,
+                revision: revision,
+                kind: kind,
+                prompt: prompt,
+                choices: legacyChoiceLabels.map(QuestionChoice.legacy(label:)),
+                maximumAnswerLength: maximumAnswerLength,
+                expiresAt: expiresAt,
+                waitTimeoutMilliseconds: waitTimeoutMilliseconds,
+                submission: submission
+            )
+        }
+
+        public init(
+            requestID: UUID,
+            revision: Int64,
+            kind: HookDecisionKind,
+            prompt: String,
+            choices: [String],
+            maximumAnswerLength: Int? = nil,
+            expiresAt: Date? = nil,
+            waitTimeoutMilliseconds: Int = 25000,
+            submission: HelperEventSubmission
+        ) {
+            self.init(
+                requestID: requestID,
+                revision: revision,
+                kind: kind,
+                prompt: prompt,
+                legacyChoiceLabels: choices,
+                maximumAnswerLength: maximumAnswerLength,
+                expiresAt: expiresAt,
+                waitTimeoutMilliseconds: waitTimeoutMilliseconds,
+                submission: submission
+            )
         }
     }
 
     public enum HookDecision: Codable, Sendable, Equatable {
         case approve
         case deny
-        case answer(String)
+        case answerChoice(id: String)
+        case answerChoices(ids: [String])
+        case answerText(String)
+        case confirm(Bool)
+        case requestPlanChanges(String)
     }
 
     public struct HookDecisionResult: Codable, Sendable, Equatable {
@@ -180,7 +235,8 @@
         public let revision: Int64
         public let kind: HookDecisionKind
         public let prompt: String
-        public let choices: [String]
+        public let choices: [QuestionChoice]
+        public let maximumAnswerLength: Int?
         public let expiresAt: Date?
         public let projectName: String?
         public let projectRootURL: URL?
@@ -197,6 +253,7 @@
             kind = request.kind
             prompt = request.prompt
             choices = request.choices
+            maximumAnswerLength = request.maximumAnswerLength
             expiresAt = request.expiresAt
             let submission = request.submission
             projectName = submission.initialSession.project.name

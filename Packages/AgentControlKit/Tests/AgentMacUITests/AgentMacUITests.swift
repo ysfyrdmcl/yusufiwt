@@ -6,6 +6,7 @@ import AgentProtocol
 import Foundation
 import Testing
 
+// swiftlint:disable type_body_length
 @Suite("Phase 7 macOS UI", .serialized)
 struct AgentMacUITests {
     @Test("Panel placement follows the cursor display and visible fullscreen bounds")
@@ -159,6 +160,44 @@ struct AgentMacUITests {
         #expect(presentation.riskReasons == ["workspace-write"])
     }
 
+    @Test("Notification callbacks reject superseded, expired, secret, and duplicate actions")
+    @MainActor
+    func notificationResponseValidation() async {
+        let requestID = UUID()
+        let current = PendingHookDecision(request: Self.decisionRequest(requestID: requestID, revision: 2))
+        let transport = FixtureUITransport(sessions: [], pending: [current])
+        let store = AgentControlStore(transport: transport, refreshInterval: .seconds(60))
+        await store.refreshNow()
+        #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: requestID, revision: 1)) == .superseded)
+        #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: requestID, revision: 2)) == .sent)
+        #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: requestID, revision: 2)) == .notFound)
+
+        let expiredID = UUID()
+        let expired = PendingHookDecision(request: Self.decisionRequest(requestID: expiredID, expiresAt: .distantPast))
+        await transport.setPending([expired])
+        await store.refreshNow()
+        #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: expiredID, revision: 1)) == .expired)
+
+        let secretID = UUID()
+        let secret = PendingHookDecision(request: Self.decisionRequest(requestID: secretID, kind: .question, questionKind: .secret))
+        await transport.setPending([secret])
+        await store.refreshNow()
+        #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: secretID, revision: 1)) == .rejected)
+    }
+
+    @Test("Global hotkey defaults to Control-Option-Space and persists customization")
+    @MainActor
+    func globalHotKeyPersistence() throws {
+        let suiteName = "AgentMacUITests.hotkey.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let preferences = GlobalHotKeyPreferences(defaults: defaults)
+        #expect(preferences.load() == .controlOptionSpace)
+        #expect(preferences.load().keyCode == 49)
+        preferences.save(.commandShiftA)
+        #expect(preferences.load() == .commandShiftA)
+    }
+
     private static func sessions(count: Int) -> [SessionListItem] {
         (0 ..< count).map { index in
             SessionListItem(
@@ -178,7 +217,7 @@ struct AgentMacUITests {
         requestID: UUID = UUID(),
         revision: Int64 = 1,
         kind: HookDecisionKind = .approval,
-        questionKind: QuestionKind = .text,
+        questionKind: QuestionKind = .freeText,
         expiresAt: Date? = Date.distantFuture
     ) -> HookDecisionRequest {
         let sessionID = SessionID(UUID())
@@ -223,7 +262,9 @@ struct AgentMacUITests {
                 sessionID: sessionID,
                 kind: questionKind,
                 prompt: "Choose",
-                choices: questionKind == .choice ? ["A", "B"] : []
+                choices: questionKind == .singleChoice
+                    ? [QuestionChoice(id: "a", label: "A"), QuestionChoice(id: "b", label: "B")]
+                    : []
             )
             payload = (try? JSONValue.encoding(question)) ?? .object([:])
         case .plan:
@@ -247,12 +288,16 @@ struct AgentMacUITests {
             revision: revision,
             kind: kind,
             prompt: "Approve fixture?",
-            choices: kind == .question && questionKind == .choice ? ["A", "B"] : [],
+            choices: kind == .question && questionKind == .singleChoice
+                ? [QuestionChoice(id: "a", label: "A"), QuestionChoice(id: "b", label: "B")]
+                : [],
             expiresAt: expiresAt,
             submission: HelperEventSubmission(envelope: envelope, initialSession: session)
         )
     }
 }
+
+// swiftlint:enable type_body_length
 
 private actor FixtureUITransport: AgentControlTransport {
     private var online = true
@@ -271,6 +316,10 @@ private actor FixtureUITransport: AgentControlTransport {
 
     func setSessions(_ value: [SessionListItem]) {
         sessionItems = value
+    }
+
+    func setPending(_ value: [PendingHookDecision]) {
+        pending = value
     }
 
     func lastDecision() -> HookDecision? {

@@ -5,6 +5,15 @@ import Testing
 
 @Suite("LaunchAgent and XPC contracts", .serialized)
 struct LaunchAgentAndXPCContractTests {
+    @Test("LaunchAgent registration reports the resulting service state")
+    func registration() async throws {
+        let paths = try temporaryPaths()
+        let service = LaunchAgentServiceFixture(state: .notRegistered)
+        let manager = LaunchAgentManager(service: service, paths: paths)
+        #expect(try await manager.register() == .enabled)
+        #expect(await manager.status() == .enabled)
+    }
+
     @Test("LaunchAgent unregister is idempotent and cleans owned transient files")
     func uninstall() async throws {
         let paths = try temporaryPaths()
@@ -13,9 +22,13 @@ struct LaunchAgentAndXPCContractTests {
         try server.start()
         let service = LaunchAgentServiceFixture(state: .enabled)
         let manager = LaunchAgentManager(service: service, paths: paths)
+        try Data("queued".utf8).write(to: paths.spoolDirectory.appendingPathComponent("event.json"))
+        try Data("handoff".utf8).write(to: paths.handoffURL)
 
         #expect(try await manager.unregister() == .notRegistered)
         #expect(!FileManager.default.fileExists(atPath: paths.socketURL.path))
+        #expect(!FileManager.default.fileExists(atPath: paths.spoolDirectory.path))
+        #expect(!FileManager.default.fileExists(atPath: paths.handoffURL.path))
         #expect(await service.unregisterCount == 1)
         #expect(try await manager.unregister() == .notRegistered)
         #expect(await service.unregisterCount == 1)

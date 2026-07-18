@@ -7,6 +7,7 @@
         let store: AgentControlStore
         let decision: PendingHookDecision
         @State private var answer = ""
+        @State private var selectedChoiceIDs: Set<String> = []
 
         public init(store: AgentControlStore, decision: PendingHookDecision) {
             self.store = store
@@ -69,6 +70,8 @@
             case .actionable:
                 if decision.kind == .question {
                     questionControls
+                } else if decision.kind == .plan {
+                    planControls
                 } else {
                     approvalControls
                 }
@@ -83,7 +86,7 @@
                 .keyboardShortcut(.cancelAction)
                 Button("action.openTerminal") { store.openTerminal(for: decision) }
                 Spacer()
-                Button(decision.kind == .plan ? "action.acceptPlan" : "action.approve") {
+                Button("action.approve") {
                     Task { _ = await store.resolve(decision, as: .approve) }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -92,15 +95,45 @@
 
         @ViewBuilder
         private var questionControls: some View {
-            if !decision.choices.isEmpty {
+            switch decision.question?.kind {
+            case .singleChoice:
                 HStack {
                     ForEach(decision.choices, id: \.self) { choice in
-                        Button(choice) { Task { _ = await store.resolve(decision, as: .answer(choice)) } }
+                        Button(choice.label) { Task { _ = await store.resolve(decision, as: .answerChoice(id: choice.id)) } }
                     }
                     Spacer()
                     Button("action.openTerminal") { store.openTerminal(for: decision) }
                 }
-            } else {
+            case .multiChoice:
+                VStack(alignment: .leading) {
+                    ForEach(decision.choices) { choice in
+                        Toggle(choice.label, isOn: Binding(
+                            get: { selectedChoiceIDs.contains(choice.id) },
+                            set: { selected in
+                                if selected {
+                                    selectedChoiceIDs.insert(choice.id)
+                                } else {
+                                    selectedChoiceIDs.remove(choice.id)
+                                }
+                            }
+                        ))
+                    }
+                    Button("action.sendAnswer") {
+                        Task { _ = await store.resolve(decision, as: .answerChoices(ids: selectedChoiceIDs.sorted())) }
+                    }
+                    .disabled(selectedChoiceIDs.isEmpty)
+                }
+            case .confirmation:
+                HStack {
+                    Button("action.deny", role: .destructive) {
+                        Task { _ = await store.resolve(decision, as: .confirm(false)) }
+                    }
+                    Button("action.confirm") {
+                        Task { _ = await store.resolve(decision, as: .confirm(true)) }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            case .freeText, .none:
                 HStack {
                     TextField("decision.answerPlaceholder", text: $answer)
                         .textFieldStyle(.roundedBorder)
@@ -109,6 +142,30 @@
                         .disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.defaultAction)
                     Button("action.openTerminal") { store.openTerminal(for: decision) }
+                }
+            case .secret:
+                EmptyView()
+            }
+        }
+
+        private var planControls: some View {
+            VStack(alignment: .trailing) {
+                TextField("decision.requestChangesPlaceholder", text: $answer)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Button("action.deny", role: .destructive) {
+                        Task { _ = await store.resolve(decision, as: .deny) }
+                    }
+                    Spacer()
+                    Button("action.requestChanges") {
+                        let value = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+                        Task { _ = await store.resolve(decision, as: .requestPlanChanges(value)) }
+                    }
+                    .disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("action.acceptPlan") {
+                        Task { _ = await store.resolve(decision, as: .approve) }
+                    }
+                    .keyboardShortcut(.defaultAction)
                 }
             }
         }
@@ -129,7 +186,8 @@
         private func submitAnswer() {
             let value = answer.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !value.isEmpty else { return }
-            Task { _ = await store.resolve(decision, as: .answer(value)) }
+            guard value.count <= (decision.maximumAnswerLength ?? 4000) else { return }
+            Task { _ = await store.resolve(decision, as: .answerText(value)) }
         }
     }
 

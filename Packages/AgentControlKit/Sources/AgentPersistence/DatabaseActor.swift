@@ -41,6 +41,25 @@ public actor DatabaseActor {
         }
     }
 
+    /// Opens and migrates a database on a detached executor. UI-facing callers
+    /// must use this factory so synchronous SQLite open/migration work never
+    /// inherits `MainActor`.
+    public nonisolated static func open(
+        configuration: DatabaseConfiguration,
+        cipher: any SensitiveFieldCipher = UnavailableSensitiveFieldCipher(),
+        migrations: [DatabaseMigration] = AgentControlMigrations.all,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) async throws -> DatabaseActor {
+        try await Task.detached(priority: .utility) {
+            try DatabaseActor(
+                configuration: configuration,
+                cipher: cipher,
+                migrations: migrations,
+                now: now
+            )
+        }.value
+    }
+
     public func close() {
         connection?.close()
         connection = nil

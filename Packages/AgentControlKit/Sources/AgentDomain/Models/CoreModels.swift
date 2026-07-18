@@ -139,23 +139,149 @@ public struct ToolRun: Codable, Sendable, Identifiable {
     }
 }
 
-public enum QuestionKind: String, Codable, Sendable { case choice, multiChoice, text, secret, confirmation }
+public enum QuestionKind: String, Codable, Sendable {
+    case singleChoice
+    case multiChoice
+    case freeText
+    case confirmation
+    case secret
+
+    @available(*, deprecated, renamed: "singleChoice")
+    public static var choice: QuestionKind {
+        .singleChoice
+    }
+
+    @available(*, deprecated, renamed: "freeText")
+    public static var text: QuestionKind {
+        .freeText
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case "choice", "singleChoice": self = .singleChoice
+        case "multiChoice": self = .multiChoice
+        case "text", "freeText": self = .freeText
+        case "confirmation": self = .confirmation
+        case "secret": self = .secret
+        default:
+            throw try DecodingError.dataCorruptedError(
+                in: decoder.singleValueContainer(),
+                debugDescription: "Unknown question kind: \(value)"
+            )
+        }
+    }
+}
+
 public enum QuestionStatus: String, Codable, Sendable { case pending, answered, expired, cancelled }
+
+public struct QuestionChoice: Codable, Hashable, Sendable, Identifiable {
+    public let id: String
+    public let label: String
+
+    public init(id: String, label: String) {
+        precondition(!id.isEmpty, "Question choice IDs must not be empty")
+        self.id = id
+        self.label = label
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let label = try? container.decode(String.self) {
+            id = "legacy-" + label.utf8.map { String(format: "%02x", $0) }.joined()
+            self.label = label
+            return
+        }
+        let value = try container.decode(StructuredChoice.self)
+        guard !value.id.isEmpty else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Question choice ID is empty")
+        }
+        id = value.id
+        label = value.label
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(StructuredChoice(id: id, label: label))
+    }
+
+    public static func legacy(label: String) -> QuestionChoice {
+        QuestionChoice(
+            id: "legacy-" + label.utf8.map { String(format: "%02x", $0) }.joined(),
+            label: label
+        )
+    }
+
+    private struct StructuredChoice: Codable {
+        let id: String
+        let label: String
+    }
+}
 
 public struct AgentQuestion: Codable, Sendable, Identifiable, Equatable {
     public let id: QuestionID
     public let sessionID: SessionID
     public let kind: QuestionKind
     public let prompt: String
-    public let choices: [String]
+    public let choices: [QuestionChoice]
+    public let maximumAnswerLength: Int?
     public var status: QuestionStatus
 
-    public init(id: QuestionID, sessionID: SessionID, kind: QuestionKind, prompt: String, choices: [String] = [], status: QuestionStatus = .pending) {
+    public init(
+        id: QuestionID,
+        sessionID: SessionID,
+        kind: QuestionKind,
+        prompt: String,
+        choices: [QuestionChoice] = [],
+        maximumAnswerLength: Int? = nil,
+        status: QuestionStatus = .pending
+    ) {
         self.id = id
         self.sessionID = sessionID
         self.kind = kind
         self.prompt = prompt
         self.choices = choices
+        self.maximumAnswerLength = maximumAnswerLength
         self.status = status
+    }
+
+    public init(
+        id: QuestionID,
+        sessionID: SessionID,
+        kind: QuestionKind,
+        prompt: String,
+        legacyChoiceLabels: [String],
+        maximumAnswerLength: Int? = nil,
+        status: QuestionStatus = .pending
+    ) {
+        self.init(
+            id: id,
+            sessionID: sessionID,
+            kind: kind,
+            prompt: prompt,
+            choices: legacyChoiceLabels.map(QuestionChoice.legacy(label:)),
+            maximumAnswerLength: maximumAnswerLength,
+            status: status
+        )
+    }
+
+    public init(
+        id: QuestionID,
+        sessionID: SessionID,
+        kind: QuestionKind,
+        prompt: String,
+        choices: [String],
+        maximumAnswerLength: Int? = nil,
+        status: QuestionStatus = .pending
+    ) {
+        self.init(
+            id: id,
+            sessionID: sessionID,
+            kind: kind,
+            prompt: prompt,
+            legacyChoiceLabels: choices,
+            maximumAnswerLength: maximumAnswerLength,
+            status: status
+        )
     }
 }

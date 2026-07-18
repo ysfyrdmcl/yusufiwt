@@ -63,7 +63,7 @@ struct SessionStateMachineTests {
     func attentionRestoration() {
         var aggregate = SessionAggregate(session: makeSession(state: .running))
         let approval = makeApproval(providerID: "a")
-        let question = AgentQuestion(id: QuestionID(UUID()), sessionID: aggregate.session.id, kind: .text, prompt: "Input")
+        let question = AgentQuestion(id: QuestionID(UUID()), sessionID: aggregate.session.id, kind: .freeText, prompt: "Input")
         #expect(aggregate.apply(event(.approvalRequested(approval), sequence: 1)) == .applied)
         #expect(aggregate.apply(event(.questionRequested(question), sequence: 2)) == .applied)
         #expect(aggregate.session.state == .waitingApproval)

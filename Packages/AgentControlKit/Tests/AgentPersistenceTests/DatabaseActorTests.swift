@@ -52,6 +52,15 @@ struct DatabaseActorTests {
         #expect(try await reopened.session(id: fixture.sessionID)?.state == .running)
     }
 
+    @Test("MainActor callers open disk databases through a detached factory")
+    @MainActor
+    func detachedOpenFromMainActor() async throws {
+        let location = try temporaryDatabaseURL()
+        let database = try await DatabaseActor.open(configuration: DatabaseConfiguration(url: location))
+        #expect(try await database.integrityCheck() == .healthy)
+        await database.close()
+    }
+
     @Test("Migration is idempotent and detects changed history")
     func migrations() async throws {
         let location = try temporaryDatabaseURL()

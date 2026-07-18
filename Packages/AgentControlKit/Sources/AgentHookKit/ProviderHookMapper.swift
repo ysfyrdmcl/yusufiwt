@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 #if os(macOS)
     import AgentDomain
     import AgentLocalIPC
@@ -119,6 +120,7 @@
                     kind: $0.kind,
                     prompt: $0.prompt,
                     choices: $0.choices,
+                    maximumAnswerLength: $0.maximumAnswerLength,
                     expiresAt: now.addingTimeInterval(60),
                     waitTimeoutMilliseconds: 25000,
                     submission: submission
@@ -134,16 +136,33 @@
                 return approvalOutput(provider: mapping.provider, event: mapping.eventName, behavior: "allow")
             case .deny:
                 return approvalOutput(provider: mapping.provider, event: mapping.eventName, behavior: "deny")
-            case let .answer(answer):
-                guard mapping.provider == .claude, mapping.eventName == "Elicitation" else { return .object([:]) }
-                return .object([
-                    "hookSpecificOutput": .object([
-                        "hookEventName": .string("Elicitation"),
-                        "action": .string("accept"),
-                        "content": .object(["value": .string(answer)])
-                    ])
-                ])
+            case let .answerChoice(id):
+                guard let answer = mapping.decisionRequest?.choices.first(where: { $0.id == id })?.label else {
+                    return .object([:])
+                }
+                return elicitationOutput(answer: .string(answer), mapping: mapping)
+            case let .answerChoices(ids):
+                let labels = ids.compactMap { id in mapping.decisionRequest?.choices.first(where: { $0.id == id })?.label }
+                guard labels.count == ids.count else { return .object([:]) }
+                return elicitationOutput(answer: .array(labels.map(JSONValue.string)), mapping: mapping)
+            case let .answerText(answer):
+                return elicitationOutput(answer: .string(answer), mapping: mapping)
+            case let .confirm(answer):
+                return elicitationOutput(answer: .bool(answer), mapping: mapping)
+            case .requestPlanChanges:
+                return .object([:])
             }
+        }
+
+        private func elicitationOutput(answer: JSONValue, mapping: ProviderHookMapping) -> JSONValue {
+            guard mapping.provider == .claude, mapping.eventName == "Elicitation" else { return .object([:]) }
+            return .object([
+                "hookSpecificOutput": .object([
+                    "hookEventName": .string("Elicitation"),
+                    "action": .string("accept"),
+                    "content": .object(["value": answer])
+                ])
+            ])
         }
 
         private func approvalOutput(provider: HookProvider, event: String, behavior: String) -> JSONValue {
@@ -208,7 +227,8 @@
                         id: requestUUID,
                         kind: .approval,
                         prompt: approvalPrompt(fields: fields),
-                        choices: []
+                        choices: [],
+                        maximumAnswerLength: nil
                     ) : nil
                 )
             }
@@ -216,10 +236,19 @@
             if provider == .claude, eventName == "Elicitation" {
                 let prompt = fields["message"]?.stringValue ?? "Claude is waiting for input."
                 let questionID = QuestionID(StableIdentifier.uuid("question:\(sessionID):\(prompt)"))
-                let secret = requestedSchemaContainsSecret(fields["requested_schema"])
-                let choices = extractChoices(fields["requested_schema"])
-                let kind: QuestionKind = secret ? .secret : (choices.isEmpty ? .text : .choice)
-                let question = AgentQuestion(id: questionID, sessionID: sessionID, kind: kind, prompt: prompt, choices: choices)
+                let requestedSchema = fields["requested_schema"]
+                let secret = requestedSchemaContainsSecret(requestedSchema)
+                let choices = extractChoices(requestedSchema)
+                let kind = questionKind(schema: requestedSchema, secret: secret, choices: choices)
+                let maximumAnswerLength = extractMaximumLength(requestedSchema)
+                let question = AgentQuestion(
+                    id: questionID,
+                    sessionID: sessionID,
+                    kind: kind,
+                    prompt: prompt,
+                    choices: choices,
+                    maximumAnswerLength: maximumAnswerLength
+                )
                 let payload = (try? JSONValue.encoding(question)) ?? .object(["prompt": .string(prompt)])
                 let canAnswer = capabilities.supports(.answerQuestions) && !secret
                 return NormalizedHookEvent(
@@ -230,7 +259,8 @@
                         id: questionID.rawValue,
                         kind: .question,
                         prompt: prompt,
-                        choices: choices
+                        choices: choices,
+                        maximumAnswerLength: maximumAnswerLength
                     ) : nil
                 )
             }
@@ -328,7 +358,38 @@
                     }
                 }
             }
+            if let items = schema["items"] {
+                return extractChoices(items)
+            }
             return []
+        }
+
+        private func questionKind(schema: JSONValue?, secret: Bool, choices: [String]) -> QuestionKind {
+            if secret {
+                return .secret
+            }
+            let type = schema?["type"]?.stringValue?.lowercased()
+            if type == "boolean" {
+                return .confirmation
+            }
+            if type == "array", !choices.isEmpty {
+                return .multiChoice
+            }
+            if !choices.isEmpty {
+                return .singleChoice
+            }
+            return .freeText
+        }
+
+        private func extractMaximumLength(_ schema: JSONValue?) -> Int? {
+            guard let schema else { return nil }
+            if case let .number(value)? = schema["maxLength"], value.rounded() == value, value > 0 {
+                return min(Int(value), 100_000)
+            }
+            if case let .object(properties)? = schema["properties"] {
+                return properties.values.compactMap(extractMaximumLength).min()
+            }
+            return nil
         }
 
         private func parseDate(_ value: String?) -> Date? {
@@ -348,6 +409,7 @@
         let kind: HookDecisionKind
         let prompt: String
         let choices: [String]
+        let maximumAnswerLength: Int?
     }
 
     private enum StableIdentifier {

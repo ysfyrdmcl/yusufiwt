@@ -19,7 +19,10 @@
             authorizationPolicy: XPCClientAuthorizationPolicy
         ) async throws -> HelperHost {
             try paths.prepare()
-            let database = try DatabaseActor(configuration: DatabaseConfiguration(url: paths.databaseURL), cipher: cipher)
+            let database = try await DatabaseActor.open(
+                configuration: DatabaseConfiguration(url: paths.databaseURL),
+                cipher: cipher
+            )
             let registry = SessionRegistryActor(database: database)
             _ = try await registry.restoreActiveSnapshots()
             let spool = HookSpool(directory: paths.spoolDirectory)

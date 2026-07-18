@@ -17,13 +17,25 @@ done
 
 grep -q 'DecisionAvailability.evaluate' Packages/AgentControlKit/Sources/AgentMacUI/AgentControlStore.swift
 grep -q 'sentToProvider' Packages/AgentControlKit/Sources/AgentMacUI/DecisionExperience.swift
-grep -q 'isApplied: Bool { false }' Packages/AgentControlKit/Sources/AgentMacUI/DecisionExperience.swift
+grep -q 'isApplied: Bool' Packages/AgentControlKit/Sources/AgentMacUI/DecisionExperience.swift
 grep -q 'secretRequiresTerminal' Packages/AgentControlKit/Sources/AgentMacUI/DecisionViews.swift
+grep -q 'case answerChoice(id: String)' Packages/AgentControlKit/Sources/AgentLocalIPC/IPCModels.swift
+grep -q 'case answerChoices(ids: \[String\])' Packages/AgentControlKit/Sources/AgentLocalIPC/IPCModels.swift
+grep -q 'case answerText(String)' Packages/AgentControlKit/Sources/AgentLocalIPC/IPCModels.swift
+grep -q 'case confirm(Bool)' Packages/AgentControlKit/Sources/AgentLocalIPC/IPCModels.swift
+grep -q 'case requestPlanChanges(String)' Packages/AgentControlKit/Sources/AgentLocalIPC/IPCModels.swift
+grep -q 'maximumAnswerLength' Packages/AgentControlKit/Sources/AgentLocalIPC/IPCModels.swift
+grep -q 'QuestionChoice' Packages/AgentControlKit/Sources/AgentDomain/Models/CoreModels.swift
+grep -q 'selectedChoiceIDs' Packages/AgentControlKit/Sources/AgentMacUI/DecisionViews.swift
+grep -q 'action.requestChanges' Packages/AgentControlKit/Sources/AgentMacUI/DecisionViews.swift
 grep -q 'threadIdentifier = decision.sessionID' Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift
 grep -q 'authenticationRequired' Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift
 grep -q 'MacNotificationCategory.secretQuestion' Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift
 grep -q 'quietHours' Packages/AgentControlKit/Sources/AgentMacUI/NotificationPolicy.swift
 grep -q 'focusAware' Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift
+grep -q 'authorizationState' Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift
+grep -q 'NotificationResponseDisposition' Packages/AgentControlKit/Sources/AgentMacUI/AgentControlStore.swift
+grep -q 'system Focus' Docs/PHASE_0_8_REMEDIATION_TEST_PLAN.md
 jq -e '.strings | to_entries | all(.value.localizations.en.stringUnit.value and .value.localizations.tr.stringUnit.value)' \
   Apps/macOS/Resources/Localizable.xcstrings >/dev/null
 

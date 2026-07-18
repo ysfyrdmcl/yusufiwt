@@ -17,6 +17,10 @@ migration safety, privacy boundary, retention, backup, and recovery diagnostics.
 - Secret fields and sensitive writes without encryption fail closed.
 - Retention deletion respects its batch bound and may run at utility priority.
 - Backup, immutable read-only inspection, export, and corrupt-file diagnosis work.
+- `Scripts/test_persistence_process_crash.sh` kills a separate SQLite process
+  between event/snapshot writes and commit, then proves WAL recovery exposes
+  neither partial write. A committed pair, duplicate no-op, migration no-op,
+  and integrity check are verified after reopen.
 
 ## Performance fixture
 

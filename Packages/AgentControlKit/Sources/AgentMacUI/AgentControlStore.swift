@@ -22,6 +22,16 @@
         case error(String)
     }
 
+    public enum NotificationResponseDisposition: Sendable, Equatable {
+        case sent
+        case reviewed
+        case openedTerminal
+        case notFound
+        case superseded
+        case expired
+        case rejected
+    }
+
     @MainActor
     @Observable
     public final class AgentControlStore {
@@ -139,19 +149,48 @@
             }
         }
 
-        public func handleNotificationResponse(_ response: MacNotificationResponse) async {
-            guard let decision = pendingDecisions.first(where: {
-                $0.requestID == response.requestID && $0.revision == response.revision
-            }) else { return }
+        @discardableResult
+        public func handleNotificationResponse(
+            _ response: MacNotificationResponse,
+            now: Date = Date()
+        ) async -> NotificationResponseDisposition {
+            guard let decision = pendingDecisions.first(where: { $0.requestID == response.requestID }) else {
+                return .notFound
+            }
+            guard decision.revision == response.revision else {
+                acknowledgmentStatuses[response.requestID] = .superseded
+                return .superseded
+            }
+            guard DecisionAvailability.evaluate(decision, now: now) != .expired else {
+                acknowledgmentStatuses[response.requestID] = .expired
+                return .expired
+            }
+            let isSecret = DecisionAvailability.evaluate(decision, now: now) == .secretRequiresTerminal
+            guard !isSecret || response.action == .openTerminal || response.action == .review else {
+                acknowledgmentStatuses[response.requestID] = .rejected
+                return .rejected
+            }
             switch response.action {
             case .approve:
+                guard decision.kind == .approval || decision.kind == .plan else {
+                    acknowledgmentStatuses[response.requestID] = .rejected
+                    return .rejected
+                }
                 _ = await resolve(decision, as: .approve)
+                return .sent
             case .deny:
+                guard decision.kind == .approval || decision.kind == .plan else {
+                    acknowledgmentStatuses[response.requestID] = .rejected
+                    return .rejected
+                }
                 _ = await resolve(decision, as: .deny)
+                return .sent
             case .review:
                 selectedSection = .inbox
+                return .reviewed
             case .openTerminal:
                 TerminalFallback.open(for: decision)
+                return .openedTerminal
             }
         }
 

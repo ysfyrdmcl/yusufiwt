@@ -14,10 +14,9 @@ contract-test:
 	./Tests/Contracts/test_repository_contract.sh
 	./Tests/Contracts/test_project_contract.sh
 	./Tests/Contracts/test_secret_hygiene.sh
-	./Tests/Contracts/test_phase4_contract.sh
-	./Tests/Contracts/test_phase5_contract.sh
-	./Tests/Contracts/test_phase6_contract.sh
-	./Tests/Contracts/test_phase7_contract.sh
+	@for script in ./Tests/Contracts/test_phase*_contract.sh; do \
+		"$$script"; \
+	done
 
 swift-test:
 	./Scripts/test_swift.sh

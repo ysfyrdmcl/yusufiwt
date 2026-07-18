@@ -21,7 +21,8 @@ session registry, health, restart, and update handoff.
 - Active snapshots restore after database/helper restart.
 - Health, heartbeat, version negotiation, update handoff, and graceful shutdown
   return typed states.
-- LaunchAgent unregister is idempotent and removes only an owned socket.
+- LaunchAgent unregister is idempotent and removes only owned socket, handoff,
+  and private spool artifacts; it never deletes the event database.
 
 ## Manual signed-build check
 
@@ -30,6 +31,10 @@ exist under `Contents/MacOS` and `Contents/Library/LaunchAgents`, register via
 `LaunchAgentManager`, and verify an unrelated signed process is denied by the
 live Mach service. Automated tests use deterministic signature fixtures because
 CI artifacts may be ad-hoc signed.
+
+`SMAppService.unregister()` removes the registered service. The source plist is
+an app-bundle resource and disappears when the signed app bundle is uninstalled;
+AgentControl never mutates or deletes an arbitrary external plist.
 
 ## Acceptance
 

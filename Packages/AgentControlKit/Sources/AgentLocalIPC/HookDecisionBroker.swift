@@ -1,4 +1,5 @@
 #if os(macOS)
+    import AgentDomain
     import Foundation
 
     public actor HookDecisionBroker {
@@ -88,13 +89,37 @@
             switch (request.kind, decision) {
             case (.approval, .approve), (.approval, .deny), (.plan, .approve), (.plan, .deny):
                 true
-            case let (.question, .answer(value)):
-                request.choices.isEmpty || request.choices.contains(value)
+            case let (.plan, .requestPlanChanges(value)):
+                !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && value.count <= 4000
+            case let (.question, .answerChoice(id)):
+                request.effectiveQuestionKind == .singleChoice && request.choices.contains { $0.id == id }
+            case let (.question, .answerChoices(ids)):
+                request.effectiveQuestionKind == .multiChoice && !ids.isEmpty && Set(ids).count == ids.count
+                    && ids.allSatisfy { id in request.choices.contains { $0.id == id } }
+            case let (.question, .answerText(value)):
+                request.effectiveQuestionKind == .freeText
+                    && !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    && value.count <= (request.maximumAnswerLength ?? 4000)
+            case (.question, .confirm):
+                request.effectiveQuestionKind == .confirmation
             case (.question, .deny):
                 true
             default:
                 false
             }
+        }
+    }
+
+    private extension HookDecisionRequest {
+        var questionKind: QuestionKind? {
+            guard kind == .question,
+                  let data = try? JSONEncoder().encode(submission.envelope.payload)
+            else { return nil }
+            return try? JSONDecoder().decode(AgentQuestion.self, from: data).kind
+        }
+
+        var effectiveQuestionKind: QuestionKind {
+            questionKind ?? (choices.isEmpty ? .freeText : .singleChoice)
         }
     }
 #endif

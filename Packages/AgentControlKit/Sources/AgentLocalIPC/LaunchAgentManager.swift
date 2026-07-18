@@ -66,6 +66,7 @@
             }
             try removeOwnedSocketIfPresent()
             try? FileManager.default.removeItem(at: paths.handoffURL)
+            try removeOwnedSpoolIfPresent()
             return service.state
         }
 
@@ -76,6 +77,15 @@
                 throw LocalIPCError.unsafeSocketPath
             }
             guard Darwin.unlink(paths.socketURL.path) == 0 else { throw LocalIPCError.socketFailure(code: errno) }
+        }
+
+        private func removeOwnedSpoolIfPresent() throws {
+            var info = stat()
+            guard lstat(paths.spoolDirectory.path, &info) == 0 else { return }
+            guard info.st_uid == getuid(), info.st_mode & S_IFMT == S_IFDIR,
+                  info.st_mode & (S_IRWXG | S_IRWXO) == 0
+            else { throw LocalIPCError.unsafeSocketPath }
+            try FileManager.default.removeItem(at: paths.spoolDirectory)
         }
     }
 #endif

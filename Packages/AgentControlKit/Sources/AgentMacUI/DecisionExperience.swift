@@ -49,7 +49,7 @@
                 detailLines = Self.lines(for: decision.approval?.action)
             case .question:
                 title = decision.question?.prompt ?? decision.prompt
-                detailLines = decision.choices
+                detailLines = decision.choices.map(\.label)
             case .plan:
                 title = decision.planTitle ?? decision.prompt
                 detailLines = decision.prompt == title ? [] : [decision.prompt]

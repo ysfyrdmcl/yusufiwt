@@ -57,7 +57,7 @@ enum ProtocolInspectorMain {
         case "deny": return HookDecision.deny
         case "answer":
             return arguments.count >= 2
-                ? HookDecision.answer(arguments.dropFirst().joined(separator: " "))
+                ? HookDecision.answerText(arguments.dropFirst().joined(separator: " "))
                 : nil
         default: return nil
         }

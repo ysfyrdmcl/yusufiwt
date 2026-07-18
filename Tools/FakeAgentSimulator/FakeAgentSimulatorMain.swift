@@ -55,7 +55,7 @@ enum FakeAgentSimulatorMain {
         case "deny": HookDecision.deny
         default:
             value.hasPrefix("answer:")
-                ? HookDecision.answer(String(value.dropFirst("answer:".count)))
+                ? HookDecision.answerText(String(value.dropFirst("answer:".count)))
                 : nil
         }
     }

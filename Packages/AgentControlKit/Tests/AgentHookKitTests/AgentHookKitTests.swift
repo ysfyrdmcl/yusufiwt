@@ -67,27 +67,85 @@ struct AgentHookKitTests {
     func decisionValidation() async throws {
         let broker = HookDecisionBroker()
         let request = phase4DecisionRequest(kind: .question, choices: ["Debug", "Release"], timeout: 150)
+        let debugID = try #require(request.choices.first?.id)
         async let result = broker.wait(for: request)
         try await Task.sleep(for: .milliseconds(20))
         #expect(await broker.resolve(HookDecisionResolution(
             requestID: request.requestID,
             revision: 2,
-            decision: .answer("Debug")
+            decision: .answerChoice(id: debugID)
         )) == .revisionMismatch)
         #expect(await broker.resolve(HookDecisionResolution(
             requestID: request.requestID,
             revision: 1,
-            decision: .answer("Profile")
+            decision: .answerChoice(id: "missing")
         )) == .invalidDecision)
         #expect(await broker.resolve(HookDecisionResolution(
             requestID: request.requestID,
             revision: 1,
-            decision: .answer("Debug")
+            decision: .answerChoice(id: debugID)
         )) == .accepted)
-        #expect(await result.decisionValue?.decision == .answer("Debug"))
+        #expect(await result.decisionValue?.decision == .answerChoice(id: debugID))
 
         let timedOut = phase4DecisionRequest(timeout: 10)
         #expect(await broker.wait(for: timedOut).neutralValue == .timeout)
+    }
+
+    @Test("Broker validates all question and plan decision payloads")
+    func phase8DecisionPayloads() async throws {
+        let broker = HookDecisionBroker()
+        let multi = phase8QuestionRequest(
+            kind: .multiChoice,
+            choices: [QuestionChoice(id: "debug", label: "Debug"), QuestionChoice(id: "release", label: "Release")]
+        )
+        async let multiResult = broker.wait(for: multi)
+        try await Task.sleep(for: .milliseconds(10))
+        #expect(await broker.resolve(.init(
+            requestID: multi.requestID,
+            revision: multi.revision,
+            decision: .answerChoices(ids: ["debug", "release"])
+        )) == .accepted)
+        #expect(await multiResult.decisionValue?.decision == .answerChoices(ids: ["debug", "release"]))
+
+        let boundedText = phase8QuestionRequest(kind: .freeText, maximumAnswerLength: 4)
+        async let textResult = broker.wait(for: boundedText)
+        try await Task.sleep(for: .milliseconds(10))
+        #expect(await broker.resolve(.init(
+            requestID: boundedText.requestID,
+            revision: boundedText.revision,
+            decision: .answerText("12345")
+        )) == .invalidDecision)
+        #expect(await broker.resolve(.init(
+            requestID: boundedText.requestID,
+            revision: boundedText.revision,
+            decision: .answerText("1234")
+        )) == .accepted)
+        _ = await textResult
+
+        let secret = phase8QuestionRequest(kind: .secret)
+        async let secretResult = broker.wait(for: secret)
+        try await Task.sleep(for: .milliseconds(10))
+        #expect(await broker.resolve(.init(
+            requestID: secret.requestID,
+            revision: secret.revision,
+            decision: .answerText("do-not-relay")
+        )) == .invalidDecision)
+        #expect(await broker.resolve(.init(
+            requestID: secret.requestID,
+            revision: secret.revision,
+            decision: .deny
+        )) == .accepted)
+        _ = await secretResult
+
+        let plan = phase4DecisionRequest(kind: .plan, timeout: 150)
+        async let planResult = broker.wait(for: plan)
+        try await Task.sleep(for: .milliseconds(10))
+        #expect(await broker.resolve(.init(
+            requestID: plan.requestID,
+            revision: plan.revision,
+            decision: .requestPlanChanges("Keep the public API stable")
+        )) == .accepted)
+        #expect(await planResult.decisionValue?.decision == .requestPlanChanges("Keep the public API stable"))
     }
 
     @Test("Bounded JSON rejects oversized, malformed, and deeply nested input")
@@ -201,7 +259,9 @@ private func phase4DecisionRequest(
 
 private func phase4Submission(
     sequence: Int64,
-    eventType: String = "session.stateChanged"
+    eventType: String = "session.stateChanged",
+    payload explicitPayload: JSONValue? = nil,
+    privacyClass: PrivacyClass = .privateMetadata
 ) -> HelperEventSubmission {
     let nodeID = NodeID(fixedUUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
     let sessionID = SessionID(fixedUUID("cccccccc-cccc-cccc-cccc-cccccccccccc"))
@@ -215,8 +275,8 @@ private func phase4Submission(
             sequence: sequence,
             occurredAt: date,
             receivedAt: date,
-            payload: eventType == "session.stateChanged" ? .object(["state": .string("running")]) : .object(["prompt": .string("test")]),
-            privacyClass: .privateMetadata,
+            payload: explicitPayload ?? (eventType == "session.stateChanged" ? .object(["state": .string("running")]) : .object(["prompt": .string("test")])),
+            privacyClass: privacyClass,
             correlationID: EnvelopeID(UUID()),
             schemaHash: "phase4-test"
         ),
@@ -237,6 +297,39 @@ private func phase4Submission(
             endedAt: nil,
             lastMeaningfulEventAt: date,
             snapshotRevision: 0
+        )
+    )
+}
+
+private func phase8QuestionRequest(
+    kind: QuestionKind,
+    choices: [QuestionChoice] = [],
+    maximumAnswerLength: Int? = nil
+) -> HookDecisionRequest {
+    let requestID = UUID()
+    let sessionID = SessionID(fixedUUID("cccccccc-cccc-cccc-cccc-cccccccccccc"))
+    let question = AgentQuestion(
+        id: QuestionID(requestID),
+        sessionID: sessionID,
+        kind: kind,
+        prompt: "Phase 8 question",
+        choices: choices,
+        maximumAnswerLength: maximumAnswerLength
+    )
+    return HookDecisionRequest(
+        requestID: requestID,
+        revision: 1,
+        kind: .question,
+        prompt: question.prompt,
+        choices: choices,
+        maximumAnswerLength: maximumAnswerLength,
+        expiresAt: Date().addingTimeInterval(60),
+        waitTimeoutMilliseconds: 150,
+        submission: phase4Submission(
+            sequence: 1,
+            eventType: "question.requested",
+            payload: (try? JSONValue.encoding(question)) ?? .object([:]),
+            privacyClass: kind == .secret ? .secret : .sensitive
         )
     )
 }

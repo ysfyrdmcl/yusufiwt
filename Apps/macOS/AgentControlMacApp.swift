@@ -1,3 +1,4 @@
+import AgentLocalIPC
 import AgentMacUI
 import AppKit
 import SwiftUI
@@ -14,7 +15,7 @@ struct AgentControlMacApp: App {
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("menu.togglePanel") { appDelegate.togglePanel() }
-                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                    .keyboardShortcut(.space, modifiers: [.control, .option])
             }
         }
 
@@ -24,6 +25,13 @@ struct AgentControlMacApp: App {
             MenuBarLabel(store: appDelegate.store)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            HotKeySettingsView(
+                preferences: appDelegate.hotKeyPreferences,
+                onChange: appDelegate.updateHotKey
+            )
+        }
     }
 }
 
@@ -33,6 +41,8 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
     lazy var store = AgentControlStore(notificationCoordinator: notificationCoordinator)
     private var panelCoordinator: FloatingPanelCoordinator?
     private var hotKeyController: GlobalHotKeyController?
+    private var launchAgentManager: LaunchAgentManager?
+    let hotKeyPreferences = GlobalHotKeyPreferences()
 
     func applicationDidFinishLaunching(_: Notification) {
         notificationCoordinator.responseHandler = { [weak self] response in
@@ -41,9 +51,23 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
         Task { await notificationCoordinator.configure() }
         let coordinator = FloatingPanelCoordinator(store: store)
         panelCoordinator = coordinator
-        hotKeyController = GlobalHotKeyController { [weak coordinator] in coordinator?.toggle() }
+        hotKeyController = GlobalHotKeyController(setting: hotKeyPreferences.load()) { [weak coordinator] in coordinator?.toggle() }
         hotKeyController?.start()
-        store.start()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let paths = try AgentControlPaths.userDefault()
+                let manager = LaunchAgentManager(paths: paths)
+                launchAgentManager = manager
+                if await manager.status() != .enabled {
+                    _ = try await manager.register()
+                }
+            } catch {
+                // The store exposes the helper as offline and keeps retrying;
+                // registration approval can be completed in System Settings.
+            }
+            store.start()
+        }
     }
 
     func applicationWillTerminate(_: Notification) {
@@ -54,6 +78,33 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
 
     func togglePanel() {
         panelCoordinator?.toggle()
+    }
+
+    func updateHotKey(_ value: GlobalHotKeySetting) {
+        hotKeyPreferences.save(value)
+        hotKeyController?.update(value)
+    }
+}
+
+private struct HotKeySettingsView: View {
+    @State private var selection: GlobalHotKeySetting
+    let onChange: (GlobalHotKeySetting) -> Void
+
+    init(preferences: GlobalHotKeyPreferences, onChange: @escaping (GlobalHotKeySetting) -> Void) {
+        _selection = State(initialValue: preferences.load())
+        self.onChange = onChange
+    }
+
+    var body: some View {
+        Form {
+            Picker("settings.hotkey", selection: $selection) {
+                Text("settings.hotkey.controlOptionSpace").tag(GlobalHotKeySetting.controlOptionSpace)
+                Text("settings.hotkey.commandShiftA").tag(GlobalHotKeySetting.commandShiftA)
+            }
+            .onChange(of: selection) { _, value in onChange(value) }
+        }
+        .padding()
+        .frame(width: 420)
     }
 }
 
@@ -103,7 +154,7 @@ private struct MenuBarContent: View {
             }
             .keyboardShortcut("o")
             Button("menu.togglePanel", action: togglePanel)
-                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .keyboardShortcut(.space, modifiers: [.control, .option])
             Divider()
             Button("menu.quit") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")

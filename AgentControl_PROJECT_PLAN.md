@@ -2317,6 +2317,25 @@ Bir feature tamamlanmış sayılmak için:
 
 Fazlar sırayla yürütülür. Bir sonraki faza geçmek için önceki fazın kabul kriterleri geçmelidir. UI geliştirmesi gerçek agent'a bağımlı kalmaması için ilk günden Fake Agent Simulator ile yapılır.
 
+## Faz doğrulama durumu
+
+Bu tablo yalnız gerçek test kanıtıyla güncellenir. Doğrulanan değişiklikler bir
+commit SHA'sına sahip olmadan `Verified` işaretlenmez. 18 Temmuz 2026 düzeltme
+çalışması `52eae6d` tabanı üzerinde henüz commit edilmemiştir.
+
+| Faz | Durum | Kanıt / açık bloklayıcı |
+|---|---|---|
+| 0 | Pending verification | Tam regresyon ve clean-clone CI sonucu bekleniyor |
+| 1 | Pending verification | Tam regresyon sonucu ve remediation commit SHA bekleniyor |
+| 2 | Blocked | Ayrı-process transaction crash ve MainActor profiling kapısı eksik |
+| 3 | Blocked | Signed `SMAppService` force-quit/uninstall E2E kapısı eksik |
+| 4 | Pending verification | Contract mevcut; release donanımı p95 kaydı bekleniyor |
+| 5 | Blocked | Gerçek managed Codex command/file approval oturumu çalıştırılmadı |
+| 6 | Blocked | Kurulu provider'larda canlı install/repair/uninstall smoke çalıştırılmadı |
+| 7 | Blocked | Hotkey düzeltildi; release UI first-render/scroll ölçümü bekleniyor |
+| 8 | Blocked | Soru/plan ve callback contract düzeltildi; gerçek notification → provider ack smoke bekleniyor |
+| 9 | Not started | Faz 0–8 kapısı geçmeden başlanmaz |
+
 ## Faz 0 — Repository bootstrap ve kararların sabitlenmesi
 
 ### Amaç
@@ -2545,8 +2564,6 @@ Kullanıcının mevcut terminal/IDE oturumlarını ortak protokole bağlamak.
 
 ## Faz 7 — macOS menu bar, floating panel ve temel dashboard
 
-> Durum: Tamamlandı (18 Temmuz 2026). Uygulama, kontrat ve kabul testleri eklendi.
-
 ### Amaç
 
 Yerel çekirdeği üretim kalitesinde native arayüze bağlamak.
@@ -2573,8 +2590,6 @@ Yerel çekirdeği üretim kalitesinde native arayüze bağlamak.
 - Türkçe ve İngilizce metinler tamamdır.
 
 ## Faz 8 — Approval UX, questions, plan review ve macOS notifications
-
-> Durum: Tamamlandı (18 Temmuz 2026). Uygulama, bildirim politikası, kontrat ve kabul testleri eklendi.
 
 ### Amaç
 
