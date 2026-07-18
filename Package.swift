@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "AgentLocalIPC", targets: ["AgentLocalIPC"]),
         .library(name: "AgentHookKit", targets: ["AgentHookKit"]),
         .library(name: "AgentCodexAdapter", targets: ["AgentCodexAdapter"]),
+        .library(name: "AgentCompanion", targets: ["AgentCompanion"]),
         .library(name: "AgentMacUI", targets: ["AgentMacUI"]),
         .library(name: "BuildSupport", targets: ["BuildSupport"]),
         .executable(name: "agentcontrol-hook", targets: ["AgentControlHook"]),
@@ -41,7 +42,7 @@ let package = Package(
         ),
         .target(
             name: "AgentLocalIPC",
-            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence"],
+            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence", "AgentCompanion"],
             path: "Packages/AgentControlKit/Sources/AgentLocalIPC",
             linkerSettings: [.linkedFramework("Security"), .linkedFramework("ServiceManagement")]
         ),
@@ -54,6 +55,12 @@ let package = Package(
             name: "AgentCodexAdapter",
             dependencies: ["AgentDomain", "AgentProtocol"],
             path: "Packages/AgentControlKit/Sources/AgentCodexAdapter"
+        ),
+        .target(
+            name: "AgentCompanion",
+            dependencies: ["AgentDomain"],
+            path: "Packages/AgentControlKit/Sources/AgentCompanion",
+            linkerSettings: [.linkedFramework("Security")]
         ),
         .target(
             name: "AgentMacUI",
@@ -108,6 +115,11 @@ let package = Package(
             dependencies: ["AgentDomain", "AgentProtocol", "AgentCodexAdapter"],
             path: "Packages/AgentControlKit/Tests/AgentCodexAdapterTests",
             resources: [.process("Fixtures")]
+        ),
+        .testTarget(
+            name: "AgentCompanionTests",
+            dependencies: ["AgentDomain", "AgentCompanion"],
+            path: "Packages/AgentControlKit/Tests/AgentCompanionTests"
         ),
         .testTarget(
             name: "AgentMacUITests",

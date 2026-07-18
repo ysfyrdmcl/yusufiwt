@@ -33,5 +33,12 @@ struct PerformanceFixtureTests {
             _ = try await database.appendBatch(writes)
         }
         #expect(try await database.eventCount() == 100_000)
+        let queryStarted = Date()
+        let summary = try await database.analytics(AnalyticsQuery(
+            from: start.addingTimeInterval(-1), endDate: start.addingTimeInterval(1)
+        ))
+        let queryDuration = Date().timeIntervalSince(queryStarted)
+        #expect(summary.totalSessions == 1)
+        #expect(queryDuration < 2.0, "100k analytics query exceeded the two-second release-test budget")
     }
 }

@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: bootstrap generate test contract-test swift-test persistence-performance xcode-test lint clean
+.PHONY: bootstrap generate test contract-test swift-test relay-test persistence-performance xcode-test lint clean
 
 bootstrap:
 	./Scripts/bootstrap.sh
@@ -20,6 +20,9 @@ contract-test:
 
 swift-test:
 	./Scripts/test_swift.sh
+
+relay-test:
+	swift test --disable-sandbox --package-path Services/AgentControlRelay --scratch-path .build/relay
 
 persistence-performance:
 	./Scripts/test_persistence_performance.sh

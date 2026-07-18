@@ -8,6 +8,7 @@ public actor DatabaseActor {
     let cipher: any SensitiveFieldCipher
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
+    var cachedPrivacySettings = PrivacySettings.privacyFirst
 
     public init(
         configuration: DatabaseConfiguration,
@@ -34,6 +35,11 @@ public actor DatabaseActor {
                 backupBeforeMigration: configuration.automaticBackupBeforeMigration,
                 appliedAt: now()
             )
+            if let stored = try opened.query(
+                "SELECT value FROM settings WHERE key = 'privacy'"
+            ).first?.first.flatMap(Self.data) {
+                cachedPrivacySettings = try decoder.decode(PrivacySettings.self, from: stored)
+            }
         } catch {
             opened.close()
             connection = nil

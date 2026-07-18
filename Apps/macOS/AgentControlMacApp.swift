@@ -9,7 +9,8 @@ struct AgentControlMacApp: App {
 
     var body: some Scene {
         WindowGroup(String(localized: "app.name"), id: "dashboard") {
-            DashboardView(store: appDelegate.store)
+            DashboardView(store: appDelegate.store, phase10: appDelegate.phase10)
+                .onOpenURL { appDelegate.store.handleNavigationCallback($0) }
         }
         .defaultSize(width: 1060, height: 700)
         .commands {
@@ -39,6 +40,7 @@ struct AgentControlMacApp: App {
 final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
     let notificationCoordinator = MacNotificationCoordinator()
     lazy var store = AgentControlStore(notificationCoordinator: notificationCoordinator)
+    lazy var phase10 = Phase10Coordinator(notificationCoordinator: notificationCoordinator)
     private var panelCoordinator: FloatingPanelCoordinator?
     private var hotKeyController: GlobalHotKeyController?
     private var launchAgentManager: LaunchAgentManager?
@@ -48,7 +50,9 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
         notificationCoordinator.responseHandler = { [weak self] response in
             Task { await self?.store.handleNotificationResponse(response) }
         }
-        Task { await notificationCoordinator.configure() }
+        if phase10.isCompleted {
+            Task { await notificationCoordinator.configure() }
+        }
         let coordinator = FloatingPanelCoordinator(store: store)
         panelCoordinator = coordinator
         hotKeyController = GlobalHotKeyController(setting: hotKeyPreferences.load()) { [weak coordinator] in coordinator?.toggle() }
@@ -59,7 +63,7 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
                 let paths = try AgentControlPaths.userDefault()
                 let manager = LaunchAgentManager(paths: paths)
                 launchAgentManager = manager
-                if await manager.status() != .enabled {
+                if phase10.isCompleted, await manager.status() != .enabled {
                     _ = try await manager.register()
                 }
             } catch {

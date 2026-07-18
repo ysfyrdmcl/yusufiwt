@@ -19,3 +19,7 @@ if [ -z "$coverage_path" ]; then
   exit 1
 fi
 ruby Scripts/verify_coverage.rb "$coverage_path"
+
+swift test --quiet --disable-sandbox \
+  --package-path Services/AgentControlRelay \
+  --scratch-path .build/relay

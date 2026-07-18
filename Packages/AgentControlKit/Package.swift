@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "AgentLocalIPC", targets: ["AgentLocalIPC"]),
         .library(name: "AgentHookKit", targets: ["AgentHookKit"]),
         .library(name: "AgentCodexAdapter", targets: ["AgentCodexAdapter"]),
+        .library(name: "AgentCompanion", targets: ["AgentCompanion"]),
         .library(name: "AgentMacUI", targets: ["AgentMacUI"]),
         .library(name: "BuildSupport", targets: ["BuildSupport"])
     ],
@@ -20,12 +21,17 @@ let package = Package(
         .target(name: "AgentPersistence", dependencies: ["AgentDomain", "AgentProtocol"], linkerSettings: [.linkedLibrary("sqlite3")]),
         .target(
             name: "AgentLocalIPC",
-            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence"],
+            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence", "AgentCompanion"],
             linkerSettings: [.linkedFramework("Security"), .linkedFramework("ServiceManagement")]
         ),
         .target(name: "AgentHookKit", dependencies: ["AgentDomain", "AgentProtocol", "AgentLocalIPC"]),
         .target(name: "AgentCodexAdapter", dependencies: ["AgentDomain", "AgentProtocol"]),
-        .target(name: "AgentMacUI", dependencies: ["AgentDomain", "AgentPersistence", "AgentLocalIPC"]),
+        .target(
+            name: "AgentCompanion",
+            dependencies: ["AgentDomain"],
+            linkerSettings: [.linkedFramework("Security")]
+        ),
+        .target(name: "AgentMacUI", dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence", "AgentLocalIPC", "AgentHookKit"]),
         .target(name: "BuildSupport", dependencies: ["AgentDomain"]),
         .testTarget(name: "AgentDomainTests", dependencies: ["AgentDomain"], resources: [.process("Fixtures")]),
         .testTarget(name: "AgentProtocolTests", dependencies: ["AgentDomain", "AgentProtocol"], resources: [.process("Fixtures")]),
@@ -41,9 +47,10 @@ let package = Package(
             dependencies: ["AgentDomain", "AgentProtocol", "AgentCodexAdapter"],
             resources: [.process("Fixtures")]
         ),
+        .testTarget(name: "AgentCompanionTests", dependencies: ["AgentDomain", "AgentCompanion"]),
         .testTarget(
             name: "AgentMacUITests",
-            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence", "AgentLocalIPC", "AgentMacUI"]
+            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence", "AgentLocalIPC", "AgentHookKit", "AgentMacUI"]
         ),
         .testTarget(name: "BuildSupportTests", dependencies: ["AgentDomain", "BuildSupport"])
     ],

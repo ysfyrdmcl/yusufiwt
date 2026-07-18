@@ -77,6 +77,18 @@
         }
     }
 
+    public struct ManagedConfigOperation: Sendable {
+        public let url: URL
+        public let format: ManagedConfigFormat
+        public let hooks: [HookCommandDefinition]
+
+        public init(url: URL, format: ManagedConfigFormat, hooks: [HookCommandDefinition]) {
+            self.url = url
+            self.format = format
+            self.hooks = hooks
+        }
+    }
+
     /// A lossless patcher for provider hook files. JSON/JSONC edits are inserted into
     /// the existing syntax tree as text, so comments, ordering, and unrelated fields stay byte-for-byte intact.
     public struct ManagedConfigPatchEngine: Sendable {
@@ -241,6 +253,66 @@
             return try apply(preview(at: url, format: format, hooks: hooks, uninstall: true), at: url)
         }
 
+        /// Validates every preview before writing and rolls back earlier writes if a
+        /// later operation fails or the onboarding task is cancelled.
+        public func installAtomically(_ operations: [ManagedConfigOperation]) throws -> [URL?] {
+            struct Prepared {
+                let operation: ManagedConfigOperation
+                let preview: ManagedConfigPreview
+                let existed: Bool
+            }
+            let prepared = try operations.map { operation in
+                try Prepared(
+                    operation: operation,
+                    preview: preview(
+                        at: operation.url,
+                        format: operation.format,
+                        hooks: operation.hooks
+                    ),
+                    existed: fileManager.fileExists(atPath: operation.url.path)
+                )
+            }
+            var applied: [Prepared] = []
+            var backups: [URL?] = []
+            do {
+                for item in prepared {
+                    try Task.checkCancellation()
+                    try backups.append(apply(item.preview, at: item.operation.url))
+                    if item.preview.hasChanges {
+                        applied.append(item)
+                    }
+                }
+                return backups
+            } catch {
+                for item in applied.reversed() {
+                    try? rollback(item.preview, at: item.operation.url, existed: item.existed)
+                }
+                throw error
+            }
+        }
+
+        public func latestBackup(for url: URL) throws -> URL? {
+            let directory = url.deletingLastPathComponent()
+            guard fileManager.fileExists(atPath: directory.path) else { return nil }
+            let prefix = url.lastPathComponent + ".agentcontrol-backup-"
+            return try fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.contentModificationDateKey]
+            ).filter { $0.lastPathComponent.hasPrefix(prefix) }.sorted {
+                let left = try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                let right = try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                return (left ?? .distantPast) > (right ?? .distantPast)
+            }.first
+        }
+
+        public func restoreBackup(at backupURL: URL, to url: URL, expectedCurrent: String) throws {
+            try validatePath(url, requireWritable: true)
+            let current = try read(url)
+            guard current == expectedCurrent else { throw ManagedConfigError.concurrentModification }
+            let backup = try String(contentsOf: backupURL, encoding: .utf8)
+            _ = try apply(ManagedConfigPreview(original: current, updated: backup), at: url)
+        }
+
         @discardableResult
         public func apply(
             _ preview: ManagedConfigPreview,
@@ -283,6 +355,16 @@
         private func read(_ url: URL) throws -> String {
             guard fileManager.fileExists(atPath: url.path) else { return "" }
             return try String(contentsOf: url, encoding: .utf8)
+        }
+
+        private func rollback(_ preview: ManagedConfigPreview, at url: URL, existed: Bool) throws {
+            let current = try read(url)
+            guard current == preview.updated else { throw ManagedConfigError.concurrentModification }
+            if existed {
+                _ = try apply(ManagedConfigPreview(original: current, updated: preview.original), at: url)
+            } else if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+            }
         }
 
         private func validatePath(_ url: URL, requireWritable: Bool) throws {

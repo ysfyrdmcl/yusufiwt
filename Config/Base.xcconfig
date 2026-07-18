@@ -7,9 +7,10 @@ NOTIFICATION_SERVICE_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.ios.Notification
 LIVE_ACTIVITY_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.ios.LiveActivity
 WIDGETS_BUNDLE_IDENTIFIER = com.yusuf.agentcontrol.ios.Widgets
 APP_GROUP_ID = group.com.yusuf.agentcontrol
+KEYCHAIN_ACCESS_GROUP = $(AppIdentifierPrefix)com.yusuf.agentcontrol.companion.shared
+RELAY_BASE_URL = https:/$()/relay.agentcontrol.app
 URL_SCHEME = agentcontrol
 SWIFT_STRICT_CONCURRENCY = complete
 SWIFT_TREAT_WARNINGS_AS_ERRORS = YES
 ENABLE_USER_SCRIPT_SANDBOXING = YES
 AGENTCONTROL_ALLOW_DEBUG_FEATURES = NO
-

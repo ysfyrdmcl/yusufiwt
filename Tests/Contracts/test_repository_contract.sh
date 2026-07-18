@@ -51,7 +51,7 @@ grep -q 'AGENTCONTROL_ALLOW_DEBUG_FEATURES = NO' Config/Staging.xcconfig
 grep -q 'AGENTCONTROL_ALLOW_DEBUG_FEATURES = NO' Config/Release.xcconfig
 
 if grep -R -E --exclude='test_repository_contract.sh' --exclude='test_secret_hygiene.sh' --exclude='AgentControl_PROJECT_PLAN.md' '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16}|replace_me|password[[:space:]]*=[[:space:]]*[^$])' . \
-  --exclude-dir=.git --exclude-dir=.build --exclude-dir=AgentControl.xcodeproj >/dev/null; then
+  --exclude-dir=.git --exclude-dir=.build --exclude-dir=node_modules --exclude-dir=AgentControl.xcodeproj >/dev/null; then
   echo 'potential secret or forbidden placeholder found' >&2
   exit 1
 fi

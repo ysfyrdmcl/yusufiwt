@@ -6,9 +6,11 @@
 
     public struct DashboardView: View {
         @Bindable private var store: AgentControlStore
+        @Bindable private var phase10: Phase10Coordinator
 
-        public init(store: AgentControlStore) {
+        public init(store: AgentControlStore, phase10: Phase10Coordinator = Phase10Coordinator()) {
             self.store = store
+            self.phase10 = phase10
         }
 
         public var body: some View {
@@ -28,6 +30,12 @@
             }
             .frame(minWidth: 860, minHeight: 560)
             .task { store.start() }
+            .onChange(of: store.selectedSection) { _, _ in
+                Task { await store.refreshSelectedOperations() }
+            }
+            .sheet(isPresented: $phase10.isOnboardingPresented) {
+                AgentControlOnboardingView(coordinator: phase10)
+            }
         }
 
         @ViewBuilder
@@ -41,6 +49,12 @@
                 case .overview: OverviewView(store: store)
                 case .active: ActiveSessionsView(store: store)
                 case .inbox: InboxView(store: store)
+                case .history: HistoryView(store: store)
+                case .analytics: AnalyticsView(store: store)
+                case .rules: RulesView(store: store)
+                case .diagnostics: DiagnosticsView(store: store)
+                case .privacy: PrivacySettingsView(store: store)
+                case .integrations: IntegrationManagerView(coordinator: phase10)
                 }
             }
         }
@@ -79,6 +93,18 @@
                         MetricCard(title: "overview.active", value: store.activeSessions.count, symbol: "bolt.fill", color: .blue)
                         MetricCard(title: "overview.inbox", value: store.pendingDecisions.count, symbol: "tray.full.fill", color: .orange)
                         MetricCard(title: "overview.attention", value: store.attentionSessions.count, symbol: "exclamationmark.triangle.fill", color: .red)
+                    }
+                    if !store.activeAlerts.isEmpty {
+                        Text("overview.alerts")
+                            .font(.title2.bold())
+                        ForEach(store.activeAlerts) { alert in
+                            Label(
+                                "\(alert.kind.rawValue) • \(Int(alert.observedDurationSeconds / 60)) min",
+                                systemImage: "bell.badge.fill"
+                            )
+                            .foregroundStyle(.orange)
+                            .agentCard()
+                        }
                     }
                     Text("overview.recent")
                         .font(.title2.bold())
@@ -140,7 +166,7 @@
                     }
                 }
                 .frame(minWidth: 340)
-                SessionDetailView(session: store.selectedSession, events: store.selectedEvents)
+                SessionDetailView(store: store, session: store.selectedSession, events: store.selectedEvents)
                     .frame(minWidth: 400)
             }
             .navigationTitle("active.title")
@@ -183,6 +209,7 @@
     }
 
     private struct SessionDetailView: View {
+        let store: AgentControlStore
         let session: AgentSession?
         let events: [PersistedSessionEvent]
 
@@ -195,6 +222,15 @@
                             Label(session.adapterID.rawValue.capitalized, systemImage: "cpu")
                                 .foregroundStyle(.secondary)
                             StatusBadge(state: session.state)
+                            Button("action.openTerminal") { store.navigate(to: session) }
+                            if let result = store.lastNavigationResult {
+                                Label(
+                                    "navigation.result.\(result.level.rawValue)",
+                                    systemImage: result.level >= .window ? "scope" : "arrow.up.forward.app"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(result.level >= .window ? .green : .orange)
+                            }
                         }
                         .accessibilityElement(children: .combine)
                         Divider()
@@ -284,6 +320,12 @@
             case .overview: "sidebar.overview"
             case .active: "sidebar.active"
             case .inbox: "sidebar.inbox"
+            case .history: "sidebar.history"
+            case .analytics: "sidebar.analytics"
+            case .rules: "sidebar.rules"
+            case .diagnostics: "sidebar.diagnostics"
+            case .privacy: "sidebar.privacy"
+            case .integrations: "sidebar.integrations"
             }
         }
 
@@ -292,6 +334,12 @@
             case .overview: "square.grid.2x2"
             case .active: "bolt"
             case .inbox: "tray.full"
+            case .history: "clock.arrow.circlepath"
+            case .analytics: "chart.bar.xaxis"
+            case .rules: "list.bullet.rectangle"
+            case .diagnostics: "stethoscope"
+            case .privacy: "hand.raised"
+            case .integrations: "puzzlepiece.extension"
             }
         }
     }

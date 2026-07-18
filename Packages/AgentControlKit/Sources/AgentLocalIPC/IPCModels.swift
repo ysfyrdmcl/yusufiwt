@@ -5,6 +5,8 @@
     import Foundation
 
     public enum LocalIPCContract {
+        // Phase 9 only adds request/response enum cases; all existing encoded
+        // messages remain byte-compatible, so the negotiated major stays at 1.
         public static let currentVersion: UInt16 = 1
         public static let maximumFrameSize = 1_048_576
         public static let magic = Data([0x41, 0x43, 0x49, 0x50]) // ACIP
@@ -77,6 +79,17 @@
         case listSessions(limit: Int)
         case sessionSnapshot(SessionID)
         case sessionEvents(sessionID: SessionID, limit: Int)
+        case history(HistoryQuery)
+        case analytics(AnalyticsQuery)
+        case listRules
+        case upsertRule(OperationsRule)
+        case deleteRule(UUID)
+        case activeAlerts
+        case privacySettings
+        case savePrivacySettings(PrivacySettings)
+        case diagnostics
+        case repair(RepairAction)
+        case deleteCompletedHistory(endedBefore: Date)
         case prepareForUpdate
     }
 
@@ -91,6 +104,16 @@
         case sessionList([SessionListItem])
         case sessionSnapshot(AgentSession?)
         case sessionEvents([PersistedSessionEvent])
+        case history(HistoryPage)
+        case analytics(AnalyticsSummary)
+        case rules([OperationsRule])
+        case ruleSaved(OperationsRule)
+        case ruleDeleted(Bool)
+        case activeAlerts([SessionAlert])
+        case privacySettings(PrivacySettings)
+        case diagnostics(DiagnosticsReport)
+        case repair(RepairResult)
+        case dataDeletion(DataDeletionResult)
         case updateHandoff(UpdateHandoff)
         case registryEvent(RegistryNotification)
         case neutral(reason: NeutralFallbackReason)

@@ -65,6 +65,12 @@
             let capabilities = compatibility.capabilities(for: provider, version: version)
             let adapterVersion = version?.description ?? "unknown"
             let sequence = Int64(now.timeIntervalSince1970 * 1_000_000)
+            let terminalContext = TerminalContextCapture().capture(
+                fields: fields,
+                environment: environment,
+                correlationToken: providerSessionID,
+                now: now
+            )
 
             let normalized = normalize(
                 provider: provider,
@@ -104,7 +110,7 @@
                     name: URL(fileURLWithPath: cwd).lastPathComponent.isEmpty ? "Terminal session" : URL(fileURLWithPath: cwd).lastPathComponent,
                     rootURL: URL(fileURLWithPath: cwd, isDirectory: true)
                 ),
-                terminalContext: nil,
+                terminalContext: terminalContext,
                 parentSessionID: nil,
                 state: .discovered,
                 startedAt: now,

@@ -19,7 +19,8 @@ grep -q 'product: AgentLocalIPC' project.yml
 grep -q 'Embed LaunchAgent Helper' project.yml
 test -f Docs/PHASE_3_TEST_PLAN.md
 
-if grep -R -n 'fatalError("not implemented")\|TODO[^A-Z0-9-]' Apps Services Packages --include='*.swift' 2>/dev/null; then
+if find Apps Services Packages -type d -name .build -prune -o -type f -name '*.swift' -print0 \
+  | xargs -0 grep -n 'fatalError("not implemented")\|TODO[^A-Z0-9-]' 2>/dev/null; then
   echo 'unfinished production implementation found' >&2
   exit 1
 fi

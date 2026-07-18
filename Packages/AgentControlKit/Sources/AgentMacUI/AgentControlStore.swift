@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 #if os(macOS)
     import AgentDomain
     import AgentLocalIPC
@@ -9,6 +10,12 @@
         case overview
         case active
         case inbox
+        case history
+        case analytics
+        case rules
+        case diagnostics
+        case privacy
+        case integrations
 
         public var id: String {
             rawValue
@@ -34,6 +41,8 @@
 
     @MainActor
     @Observable
+    // The observable store intentionally centralizes the dashboard's cached read models.
+    // swiftlint:disable:next type_body_length
     public final class AgentControlStore {
         public private(set) var connectionState: HelperConnectionState = .loading
         public private(set) var sessions: [SessionListItem] = []
@@ -42,6 +51,17 @@
         public private(set) var selectedEvents: [PersistedSessionEvent] = []
         public private(set) var helperHealth: HelperHealth?
         public private(set) var acknowledgmentStatuses: [UUID: LocalAcknowledgmentStatus] = [:]
+        public private(set) var historyPage = HistoryPage(items: [], totalCount: 0)
+        public private(set) var analyticsSummary: AnalyticsSummary?
+        public private(set) var operationsRules: [OperationsRule] = []
+        public private(set) var activeAlerts: [SessionAlert] = []
+        public private(set) var privacy = PrivacySettings.privacyFirst
+        public private(set) var diagnosticsReport: DiagnosticsReport?
+        public private(set) var operationsError: String?
+        public private(set) var lastRepairResult: RepairResult?
+        public private(set) var lastNavigationResult: NavigationResult?
+        private var pendingNavigationToken: String?
+        public var historyQuery = HistoryQuery()
         public var selectedSection: DashboardSection = .overview
         public var selectedSessionID: SessionID?
         public var isPanelExpanded = false
@@ -60,6 +80,7 @@
 
         private let transport: any AgentControlTransport
         private let notificationCoordinator: MacNotificationCoordinator?
+        private let navigator: any TerminalNavigating
         private let refreshInterval: Duration
         private var refreshTask: Task<Void, Never>?
         private var notificationTask: Task<Void, Never>?
@@ -67,10 +88,12 @@
         public init(
             transport: any AgentControlTransport = XPCAgentControlTransport(),
             notificationCoordinator: MacNotificationCoordinator? = nil,
+            navigator: (any TerminalNavigating)? = nil,
             refreshInterval: Duration = .seconds(2)
         ) {
             self.transport = transport
             self.notificationCoordinator = notificationCoordinator
+            self.navigator = navigator ?? TerminalNavigationCoordinator()
             self.refreshInterval = refreshInterval
         }
 
@@ -105,9 +128,14 @@
                 pendingDecisions = Self.uniqueDecisions(snapshot.pendingDecisions)
                 connectionState = .online
                 await notificationCoordinator?.reconcile(pendingDecisions)
+                if let alerts = try? await transport.alerts() {
+                    activeAlerts = alerts
+                    await notificationCoordinator?.reconcile(alerts)
+                }
                 if let selectedSessionID {
                     await loadSession(id: selectedSessionID)
                 }
+                await refreshSelectedOperations()
             } catch is CancellationError {
                 return
             } catch {
@@ -189,13 +217,144 @@
                 selectedSection = .inbox
                 return .reviewed
             case .openTerminal:
-                TerminalFallback.open(for: decision)
+                pendingNavigationToken = decision.terminalContext?.correlationToken
+                lastNavigationResult = await navigator.navigate(
+                    context: decision.terminalContext,
+                    projectURL: decision.projectRootURL
+                )
                 return .openedTerminal
             }
         }
 
         public func openTerminal(for decision: PendingHookDecision) {
-            TerminalFallback.open(for: decision)
+            pendingNavigationToken = decision.terminalContext?.correlationToken
+            Task { [weak self, navigator] in
+                let result = await navigator.navigate(
+                    context: decision.terminalContext,
+                    projectURL: decision.projectRootURL
+                )
+                self?.lastNavigationResult = result
+            }
+        }
+
+        public func navigate(to session: AgentSession) {
+            pendingNavigationToken = session.terminalContext?.correlationToken
+            Task { [weak self, navigator] in
+                let result = await navigator.navigate(
+                    context: session.terminalContext,
+                    projectURL: session.project.rootURL
+                )
+                self?.lastNavigationResult = result
+            }
+        }
+
+        public func handleNavigationCallback(_ url: URL) {
+            guard url.scheme == "agentcontrol", url.host == "navigation-result",
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let token = components.queryItems?.first(where: { $0.name == "token" })?.value,
+                  token == pendingNavigationToken,
+                  let value = components.queryItems?.first(where: { $0.name == "level" })?.value,
+                  let level = NavigationResultLevel(rawValue: value)
+            else { return }
+            lastNavigationResult = NavigationResult(
+                level: level,
+                applicationBundleID: lastNavigationResult?.applicationBundleID,
+                mechanism: "extension-callback",
+                reason: level >= .window ? nil : .exactTargetUnavailable
+            )
+            pendingNavigationToken = nil
+        }
+
+        public func refreshSelectedOperations() async {
+            do {
+                switch selectedSection {
+                case .overview:
+                    activeAlerts = try await transport.alerts()
+                case .history:
+                    historyPage = try await transport.history(historyQuery)
+                case .analytics:
+                    let now = Date()
+                    analyticsSummary = try await transport.analytics(AnalyticsQuery(
+                        from: Calendar.current.date(byAdding: .day, value: -30, to: now) ?? now,
+                        endDate: now
+                    ))
+                case .rules:
+                    operationsRules = try await transport.rules()
+                case .diagnostics:
+                    diagnosticsReport = try await transport.diagnostics()
+                case .privacy:
+                    privacy = try await transport.privacySettings()
+                case .active, .inbox, .integrations:
+                    break
+                }
+                operationsError = nil
+            } catch {
+                // Older helpers can still serve the Phase 7/8 dashboard. Keep that
+                // cached state usable while clearly scoping the unavailable surface.
+                operationsError = "This feature requires the Phase 9 helper."
+            }
+        }
+
+        public func searchHistory() async {
+            historyQuery.offset = 0
+            do {
+                historyPage = try await transport.history(historyQuery)
+                operationsError = nil
+            } catch {
+                operationsError = Self.safeMessage(error)
+            }
+        }
+
+        public func saveRule(_ rule: OperationsRule) async {
+            do {
+                try await transport.saveRule(rule)
+                operationsRules = try await transport.rules()
+                activeAlerts = try await transport.alerts()
+                operationsError = nil
+            } catch {
+                operationsError = Self.safeMessage(error)
+            }
+        }
+
+        public func deleteRule(id: UUID) async {
+            do {
+                _ = try await transport.deleteRule(id: id)
+                operationsRules = try await transport.rules()
+                operationsError = nil
+            } catch {
+                operationsError = Self.safeMessage(error)
+            }
+        }
+
+        public func savePrivacy(_ value: PrivacySettings) async {
+            do {
+                try await transport.savePrivacySettings(value)
+                privacy = try await transport.privacySettings()
+                operationsError = nil
+            } catch {
+                operationsError = Self.safeMessage(error)
+            }
+        }
+
+        public func repair(_ action: RepairAction) async {
+            do {
+                lastRepairResult = try await transport.repair(action)
+                diagnosticsReport = try await transport.diagnostics()
+                operationsError = nil
+            } catch {
+                operationsError = Self.safeMessage(error)
+            }
+        }
+
+        public func deleteCompletedHistory(endedBefore cutoff: Date) async -> DataDeletionResult? {
+            do {
+                let result = try await transport.deleteCompletedHistory(endedBefore: cutoff)
+                await refreshNow()
+                return result
+            } catch {
+                operationsError = Self.safeMessage(error)
+                return nil
+            }
         }
 
         private func refreshLoop() async {

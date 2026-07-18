@@ -30,17 +30,28 @@ targets:
     platform: macOS
     sources:
       - Apps/macOS
+    info:
+      path: Apps/macOS/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: com.yusuf.agentcontrol.navigation
+            CFBundleURLSchemes:
+              - agentcontrol
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSAppleEventsUsageDescription: AgentControl uses Automation only when you explicitly ask it to reveal an exact pane in a supported terminal.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(MAC_BUNDLE_IDENTIFIER)
         PRODUCT_NAME: AgentControl
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
     entitlements:
       path: Config/Entitlements/AgentControlMac.entitlements
     dependencies:
       - target: AgentControlHelper
+      - target: AgentControlHook
       - package: AgentControlKit
         product: AgentLocalIPC
+      - package: AgentControlKit
+        product: AgentCompanion
       - package: AgentControlKit
         product: AgentMacUI
     postBuildScripts:
@@ -48,23 +59,40 @@ targets:
         script: |
           set -eu
           helper_destination="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/MacOS/AgentControlHelper"
+          hook_destination="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/MacOS/agentcontrol-hook"
           plist_directory="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
           mkdir -p "$plist_directory"
           cp "$BUILT_PRODUCTS_DIR/AgentControlHelper" "$helper_destination"
+          cp "$BUILT_PRODUCTS_DIR/agentcontrol-hook" "$hook_destination"
           cp "$SRCROOT/Config/LaunchAgents/com.yusuf.agentcontrol.helper.plist" "$plist_directory/com.yusuf.agentcontrol.helper.plist"
           chmod 755 "$helper_destination"
+          chmod 755 "$hook_destination"
           chmod 644 "$plist_directory/com.yusuf.agentcontrol.helper.plist"
         inputFiles:
           - $(BUILT_PRODUCTS_DIR)/AgentControlHelper
+          - $(BUILT_PRODUCTS_DIR)/agentcontrol-hook
           - $(SRCROOT)/Config/LaunchAgents/com.yusuf.agentcontrol.helper.plist
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/AgentControlHelper
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/agentcontrol-hook
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/com.yusuf.agentcontrol.helper.plist
   AgentControliOS:
     type: application
     platform: iOS
     sources:
       - Apps/iOS
+    info:
+      path: Apps/iOS/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: com.yusuf.agentcontrol.companion
+            CFBundleURLSchemes:
+              - agentcontrol
+        NSCameraUsageDescription: Scan the pairing QR code shown by AgentControl on your Mac.
+        NSFaceIDUsageDescription: Confirm high-risk agent decisions before sending them to your Mac.
+        AgentControlAppGroup: $(APP_GROUP_ID)
+        AgentControlKeychainGroup: $(KEYCHAIN_ACCESS_GROUP)
+        AgentControlRelayBaseURL: $(RELAY_BASE_URL)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_IDENTIFIER)
@@ -72,6 +100,20 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
     entitlements:
       path: Config/Entitlements/AgentControliOS.entitlements
+      properties:
+        aps-environment: $(APNS_ENVIRONMENT)
+        com.apple.developer.applesignin:
+          - Default
+        com.apple.security.application-groups:
+          - $(APP_GROUP_ID)
+        keychain-access-groups:
+          - $(KEYCHAIN_ACCESS_GROUP)
+    dependencies:
+      - target: NotificationService
+      - package: AgentControlKit
+        product: AgentDomain
+      - package: AgentControlKit
+        product: AgentCompanion
   AgentControlWatch:
     type: application
     platform: watchOS
@@ -97,6 +139,14 @@ targets:
         INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
     entitlements:
       path: Config/Entitlements/NotificationService.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP_ID)
+        keychain-access-groups:
+          - $(KEYCHAIN_ACCESS_GROUP)
+    dependencies:
+      - package: AgentControlKit
+        product: AgentCompanion
   AgentLiveActivity:
     type: app-extension
     platform: iOS

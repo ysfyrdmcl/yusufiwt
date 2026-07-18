@@ -15,7 +15,7 @@
 
 ## 1.1 Ürün vizyonu
 
-AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek diğer yazılım agent'larını tek bir native macOS kontrol merkezinden izleyen, onay taleplerini yöneten, sorularını yanıtlayan, tamamlanma/başarısızlık durumlarını bildiren ve isteğe bağlı olarak iPhone ile Apple Watch üzerinden güvenli uzaktan işlem yapılmasını sağlayan bir **AI Agent Operations Center** olacaktır.
+AgentControl; tek bir Mac'te çalışan Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek diğer yazılım agent'larını native macOS kontrol merkezinden izleyen, onay taleplerini yöneten, sorularını yanıtlayan, tamamlanma/başarısızlık durumlarını bildiren ve isteğe bağlı olarak iPhone ile Apple Watch üzerinden güvenli companion kararları verilmesini sağlayan bir **AI Agent Operations Center** olacaktır.
 
 Ürün yalnızca bir durum göstergesi olmayacaktır. Üç temel işi birlikte yapacaktır:
 
@@ -54,7 +54,7 @@ AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek di
 
 ### iPhone companion
 
-- Mac/node durumlarını gösterme.
+- Eşlenmiş tek Mac'in durumunu gösterme.
 - Actionable push notification ile düşük riskli onay/red.
 - Seçenekli veya serbest metin agent sorularına yanıt verme.
 - Yüksek riskli işlemler için uygulamayı açma, tam ayrıntı gösterme, Face ID ve basılı tutarak onaylama.
@@ -74,11 +74,11 @@ AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek di
 - İçeriği okuyamaz, karar veremez ve kendi başına agent komutu çalıştıramaz.
 - APNs gönderimi, cihaz varlığı, kısa ömürlü kuyruk ve bağlantı yönetimi yapar.
 
-### Uzak node/SSH desteği
+### Kapsam sınırı — tek Mac
 
-- Uzak macOS/Linux makinelerde küçük `AgentControlRemoteNode` servisi.
-- Uzak makinedeki event'leri yerel Mac'e veya relay'e güvenli biçimde aktarır.
-- Ana ürün hiçbir zaman parola saklamaz; anahtar tabanlı SSH ve sistem Keychain kullanılır.
+- Agent'lar yalnızca AgentControl'ün kurulu olduğu tek yerel Mac'te çalışır.
+- Başka Mac/Linux makineleri, SSH bootstrap, remote node ve uzaktan agent çalıştırma desteklenmez.
+- iPhone ve Apple Watch yalnızca bu yerel Mac'teki helper'a şifreli karar/bildirim companion'ı olarak bağlanır; agent çalıştırmaz ve ayrı bir execution node oluşturmaz.
 
 ## 1.4 Çalışma modları
 
@@ -90,14 +90,14 @@ AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek di
 - Yerel bildirimler ve terminale geçiş çalışır.
 - iPhone uzaktan onay özelliği kapalıdır.
 
-### Mod B — Personal Remote
+### Mod B — Personal Companion
 
 - Sign in with Apple hesabı gerekir.
 - Mac ile iPhone QR kod/tek kullanımlık eşleme koduyla eşleştirilir.
 - Relay yalnızca şifreli zarfları taşır.
 - Kullanıcının prompt, kod, komut ve dosya içeriği sunucuda açık metin olarak bulunmaz.
 
-### Mod C — Self-Hosted Remote
+### Mod C — Self-Hosted Companion
 
 - Kullanıcı kendi Vapor relay kurulumunu çalıştırır.
 - Aynı istemciler, farklı `RELAY_BASE_URL` ve sertifika sabitleme yapılandırmasıyla çalışır.
@@ -106,14 +106,14 @@ AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek di
 ## 1.5 Hedef kullanıcılar
 
 - Aynı anda birden fazla AI coding agent kullanan bireysel geliştiriciler.
-- Birden fazla repo, terminal veya uzak makine üzerinde çalışan yazılım ekipleri.
+- Aynı Mac'te birden fazla repo, terminal veya agent oturumu çalıştıran geliştiriciler.
 - Agent görevlerini uzun süre arka planda çalıştıran geliştiriciler.
 - Telefon üzerinden düşük riskli onay vermek isteyen kullanıcılar.
 - Güvenlik nedeniyle otomatik onay yerine kontrollü insan-onay akışı isteyen ekipler.
 
 ## 1.6 Temel ürün ilkeleri
 
-1. **Local-first:** Uzak özellikler kapalıyken ürün eksiksiz yerel izleme aracı olarak çalışmalıdır.
+1. **Local-first:** Companion özellikleri kapalıyken ürün eksiksiz yerel izleme aracı olarak çalışmalıdır.
 2. **Structured events first:** Resmî app-server, hook veya API event'i varsa terminal metni taranmaz.
 3. **Doğruluk görünüşten önemlidir:** Desteklenmeyen eylem için sahte buton gösterilmez; terminale yönlendirme yapılır.
 4. **Mac son otoritedir:** Telefon yalnızca imzalı karar gönderir; agent'a uygulanmış nihai durum Mac/helper doğrulamasından sonra gösterilir.
@@ -134,7 +134,6 @@ AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek di
 - Exact terminal/IDE jump için destek matrisi ve güvenli fallback.
 - Long-running, idle, stale, failed ve waiting alert'leri.
 - iPhone eşleme, actionable notification, metin yanıtı, Face ID ve Live Activity.
-- SSH/remote node.
 - Developer ID ile imzalı/notarized macOS dağıtımı ve Sparkle güncelleme.
 - TestFlight/App Store üzerinden iOS/watchOS dağıtımı.
 
@@ -148,6 +147,7 @@ AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek di
 - Kurumsal RBAC, takım faturalandırması ve çok kiracılı yönetim paneli.
 - LLM tabanlı otomatik risk kararı.
 - Prompt/kod içeriğinin bulut tarafında aranması veya analiz edilmesi.
+- Birden fazla Mac/Linux agent node'u, SSH bootstrap ve uzaktan agent çalıştırma.
 
 ## 1.9 Başarı ölçütleri
 
@@ -166,7 +166,7 @@ AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek di
 - Yerel event'in UI'a düşme p95 süresi: `250 ms` hedef, `500 ms` üst sınır.
 - Yerel onay kararının adapter'a dönme p95 süresi: `300 ms` hedef.
 - Online Mac için telefon kararının Mac'e ulaşması p95: APNs gecikmesi hariç `2 saniye` hedef.
-- Aynı node üzerinde en az `100` eşzamanlı oturum kaydı.
+- Aynı yerel Mac üzerinde en az `100` eşzamanlı oturum kaydı.
 - Uygulama açılışında ilk kullanılabilir görünüm: `2 saniye` altında.
 - SQLite veri tabanı WAL ile yoğun event altında UI bloklamamalıdır.
 
@@ -201,17 +201,17 @@ AgentControl; Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek di
 ### Agent sorusuna metin yanıtı
 
 1. Adapter sorunun tipini `choice`, `multiChoice`, `text`, `secret`, `confirmation` olarak normalize eder.
-2. `secret` tipi uzaktan yanıta kapalıdır.
+2. `secret` tipi companion cihazdan yanıta kapalıdır.
 3. `choice` ve `text` tipi notification action veya iOS uygulaması üzerinden yanıtlanabilir.
 4. Yanıt doğrulanır, imzalanır, agent'a iletilir ve agent acknowledgment beklenir.
 
-### SSH/uzak node akışı
+### Companion erişim sınırı
 
-1. Remote node kullanıcı seviyesinde çalışır ve yerel agent hook event'lerini toplar.
-2. Node kimliği ilk eşlemede karşılıklı anahtar değişimiyle kurulur.
-3. Event'ler yerel ağda doğrudan veya relay üzerinden E2E şifreli aktarılır.
-4. Mac/iPhone UI node'u, hostname yerine kullanıcının verdiği güvenli görünen adla gösterir.
-5. Node offline olduğunda bekleyen istekler expiry süresince kuyrukta kalır; otomatik onay verilmez.
+1. Agent event'lerini yalnızca yerel Mac helper'ı toplar ve uygular.
+2. iPhone/Watch eşlemesi bir agent node eşlemesi değil, companion cihaz yetkilendirmesidir.
+3. Şifreli event/karar zarfları relay üzerinden yalnızca yerel Mac ile eşlenmiş companion cihazlar arasında taşınır.
+4. Mac offline olduğunda bekleyen kararlar expiry süresince kuyrukta kalabilir; otomatik onay verilmez.
+5. Companion cihaz hiçbir shell/agent süreci başlatamaz ve Mac helper acknowledgment'ı olmadan başarı gösteremez.
 
 ## 1.11 Risk sınıfları
 
@@ -226,8 +226,8 @@ Risk sınıfı deterministik kurallarla hesaplanır. Agent'ın kendi “safe” 
 
 ## 1.12 Sürüm yol haritası
 
-- **1.0:** macOS, iPhone, Codex/Claude/Gemini, relay, SSH node, temel analytics.
-- **1.1:** Watch, widgets, yerel ağ direct path, saved launchers, queue ve OpenCode iyileştirmeleri.
+- **1.0:** Tek macOS cihazı, iPhone, Apple Watch'ta sınırlı güvenli kararlar, Codex/Claude/Gemini, companion relay ve temel analytics.
+- **1.1:** Gelişmiş widgets, yerel ağ direct path, saved launchers, queue ve OpenCode iyileştirmeleri.
 - **1.2:** Adapter SDK, webhook/Slack bildirimleri, gelişmiş kurallar ve export.
 - **2.0:** Team mode, RBAC, merkezi audit, politika paketleri ve self-hosted yönetim paneli.
 
@@ -295,7 +295,6 @@ macOS 14/iOS 17 tabanı; modern SwiftUI, Observation, ActivityKit ve bildirim ö
   - cihaz private key referansları.
   - refresh token.
   - relay credential.
-  - SSH key bookmark/reference; private key içeriği DB'ye yazılmaz.
 - macOS bookmark data: security-scoped erişim gereken kullanıcı seçili dosya/klasörleri için.
 - Server: PostgreSQL.
 - Presence ve kısa ömürlü queue: Redis.
@@ -553,7 +552,7 @@ AgentControl/
 │   │   │   ├── Inbox/
 │   │   │   ├── History/
 │   │   │   ├── Analytics/
-│   │   │   ├── Nodes/
+│   │   │   ├── MacStatus/
 │   │   │   ├── Integrations/
 │   │   │   ├── Automations/
 │   │   │   ├── Diagnostics/
@@ -576,7 +575,7 @@ AgentControl/
 │   │   ├── Navigation/
 │   │   ├── Authentication/
 │   │   ├── Pairing/
-│   │   ├── Nodes/
+│   │   ├── MacStatus/
 │   │   ├── ActiveSessions/
 │   │   ├── ApprovalInbox/
 │   │   ├── ApprovalReview/
@@ -652,15 +651,6 @@ AgentControl/
 │   │       ├── DoctorCommand.swift
 │   │       └── VersionCommand.swift
 │   │
-│   └── AgentControlRemoteNode/
-│       ├── main.swift
-│       ├── NodeApplication.swift
-│       ├── Pairing/
-│       ├── Transport/
-│       ├── LocalHooks/
-│       ├── Health/
-│       └── Config/
-│
 ├── Packages/
 │   └── AgentControlKit/
 │       ├── Package.swift
@@ -790,7 +780,7 @@ AgentControl/
 │       │   ├── Auth/
 │       │   ├── Pairing/
 │       │   ├── Devices/
-│       │   ├── Nodes/
+│       │   ├── Macs/
 │       │   ├── Envelopes/
 │       │   ├── WebSockets/
 │       │   ├── Push/
@@ -876,7 +866,6 @@ AgentControl/
 - `AgentControlMac`: yalnızca UI, user intent ve helper bağlantısı. Agent process izlemez.
 - `AgentControlHelper`: oturumların yerel otoritesi; adapter, persistence, rules, notifications ve relay bağlantısı.
 - `AgentControlHook`: çok küçük, hızlı, stateless CLI; input okur, helper'a yollar, gerekli response'u agent formatında döndürür.
-- `AgentControlRemoteNode`: uzak makinedeki helper'ın daraltılmış sürümü.
 - `AgentControlKit`: platformdan bağımsız domain ve paylaşılan altyapı.
 - `Integrations/*`: üçüncü taraf protokollerini ortak domain event'ine çevirir.
 - `AgentControlRelay`: yalnızca kimlik, bağlantı, şifreli zarf, push ve kısa ömürlü delivery state'i.
@@ -909,14 +898,14 @@ Bu bölümde `P0` 1.0 için zorunlu, `P1` 1.0 tamamlayıcı, `P2` 1.1 ve sonras�
 ### Akış
 
 1. Hoş geldiniz ve ürünün local-first açıklaması.
-2. Çalışma modu seçimi: `Local Only`, `Personal Remote`, `Self-Hosted Remote`.
+2. Çalışma modu seçimi: `Local Only`, `Personal Companion`, `Self-Hosted Companion`.
 3. Helper kurulumu ve `SMAppService` kaydı.
 4. Notification izni.
 5. Kurulu agent ve terminal taraması.
 6. Her entegrasyon için destek seviyesi ve kurulacak hook değişikliklerinin preview'u.
 7. Seçilen hook'ların atomik kurulumu.
 8. İsteğe bağlı Accessibility/Automation açıklaması ve yalnızca ilgili terminal için yönlendirme.
-9. Remote mod seçilmişse Sign in with Apple ve iPhone eşleme.
+9. Companion modu seçilmişse Sign in with Apple ve iPhone eşleme.
 10. Test event'i ve ilk doğrulama.
 
 ### Kurallar
@@ -952,7 +941,6 @@ Her adapter aşağıdaki yeteneklerden hangilerini desteklediğini runtime'da bi
 - `streamReasoningSummary`
 - `reportTokenUsage`
 - `reportRateLimit`
-- `remoteNode`
 
 UI yalnızca `supported` olan eylemleri gösterir. `unknown` veya `degraded` durumda bilgi mesajı ve terminale git seçeneği sunulur.
 
@@ -969,7 +957,7 @@ Keşif kaynakları:
 Her oturum kartı şu alanları destekler:
 
 - Agent adı ve sürümü.
-- Node/Mac adı.
+- Yerel Mac adı.
 - Proje ve repo adı.
 - Workspace path'in privacy-safe kısaltması.
 - Branch adı; kullanıcı ayarına bağlı.
@@ -981,7 +969,6 @@ Her oturum kartı şu alanları destekler:
 - Bekleyen approval/question sayısı.
 - Son event zamanı.
 - Terminal/IDE türü.
-- Remote/local göstergesi.
 
 Görünümler:
 
@@ -991,7 +978,6 @@ Görünümler:
 - Waiting Input.
 - Failed.
 - Completed recently.
-- Node'a göre.
 - Project'e göre.
 
 Oturum state'i event'lerden türetilir; tek bir process status'üne güvenilmez.
@@ -1030,11 +1016,10 @@ Sidebar bölümleri:
 3. **Inbox:** approval, question ve plan review kuyruğu.
 4. **History:** tamamlanmış session listesi ve arama.
 5. **Analytics:** süre, başarı, bekleme, approval ve agent/project dağılımı.
-6. **Nodes:** yerel ve uzak makineler, sağlık, last seen.
-7. **Integrations:** agent/terminal adapter durumu, versiyon, test ve repair.
-8. **Automations:** alert ve güvenli approval kuralları.
-9. **Diagnostics:** helper, socket, database, relay, APNs, hook sağlık kontrolü.
-10. **Settings:** appearance, privacy, notification, security, retention, update.
+6. **Integrations:** agent/terminal adapter durumu, versiyon, test ve repair.
+7. **Automations:** alert ve güvenli approval kuralları.
+8. **Diagnostics:** helper, socket, database, relay, APNs, hook sağlık kontrolü.
+9. **Settings:** appearance, privacy, notification, security, retention, update.
 
 Dashboard listeleri büyük veri setlerinde pagination/virtualization kullanır.
 
@@ -1042,7 +1027,7 @@ Dashboard listeleri büyük veri setlerinde pagination/virtualization kullanır.
 
 Sekmeler:
 
-- **Summary:** durum, süre, proje, adapter, node, terminal.
+- **Summary:** durum, süre, proje, adapter, yerel Mac ve terminal.
 - **Timeline:** normalize event akışı.
 - **Approvals:** istekler, kararlar, acknowledgment ve actor.
 - **Tools:** tool run özetleri; içerik değil metadata.
@@ -1063,7 +1048,7 @@ Eylemler:
 
 ### Kart içeriği
 
-- Agent, project, node ve session.
+- Agent, project, yerel Mac ve session.
 - Risk badge ve risk nedenleri.
 - Request type.
 - Safe command preview veya file operation summary.
@@ -1120,7 +1105,7 @@ Bildirim türleri:
 - Session long-running.
 - Session idle/stale.
 - Rate limit.
-- Remote node disconnected.
+- Companion relay disconnected.
 - Relay/security warning.
 
 Özellikler:
@@ -1143,9 +1128,9 @@ Bildirim türleri:
 - `waitingInputFor > N`.
 - `failed`.
 - `rateLimited`.
-- `nodeDisconnected`.
+- `companionRelayDisconnected`.
 - `approvalRisk >= X`.
-- Agent/project/node filtresi.
+- Agent/project filtresi.
 - Gün/saat ve focus filtresi.
 
 ### Eylemler
@@ -1181,13 +1166,13 @@ Ayrı kavramlar:
 - **Idle:** Anlamlı event üretmez; process canlı olabilir.
 - **Waiting:** Agent açıkça kullanıcı/approval bekler.
 - **Stale:** Hook/session heartbeat kaybolur ve process durumu doğrulanamaz.
-- **Disconnected:** Remote node veya managed transport kopmuştur.
+- **Disconnected:** Managed agent transport'u veya companion relay bağlantısı kopmuştur.
 
 Detection, yalnızca stdout sessizliğine dayanmaz. Adapter heartbeat, tool progress, process state ve event zamanları birlikte kullanılır.
 
 ## 4.12 History ve arama — P0
 
-- Session, project, agent, node, state, tarih ve label filtreleri.
+- Session, project, agent, state, tarih ve label filtreleri.
 - Full-text yalnızca kullanıcı tarafından eklenen notlar ve güvenli özet alanlarında.
 - Prompt/kod için varsayılan full-text index yoktur.
 - Timeline export: redacted JSON veya CSV metadata.
@@ -1207,7 +1192,7 @@ Gösterilecek metrikler:
 - Ortalama ve medyan session süresi.
 - Approval wait süresi.
 - Question wait süresi.
-- Agent/project/node dağılımı.
+- Agent/project dağılımı.
 - Approval allowed/denied/expired oranı.
 - En sık risk nedenleri.
 - Long-running ve stale sayısı.
@@ -1267,23 +1252,19 @@ Config güncellemesi öncesi/sonrası hash ve managed block ID tutulur. Kullanı
 - Her launch öncesi preview.
 - Prod deploy veya destructive action queue'dan otomatik çalıştırılamaz.
 
-## 4.18 SSH ve remote node — P1
+## 4.18 Tek-Mac companion sınırı — P0
 
-- QR veya one-time code ile node pairing.
-- Node health, version, uptime ve supported adapters.
-- SSH bootstrap script preview.
-- Kullanıcı hesabı altında systemd user service/launchd user agent.
-- Auto reconnect ve exponential backoff.
-- Offline queue ve expiry.
-- Remote terminal jump: destekleniyorsa local terminalde SSH profile/tab açma.
-- Remote file path hiçbir zaman local path sanılmaz.
-- Node revoke anında yeni envelope kabulünü durdurur.
+- QR veya one-time code yalnızca iPhone companion eşlemesi içindir.
+- Agent session'ları yalnızca kurulu yerel Mac helper'ından kabul edilir.
+- SSH bootstrap, remote terminal jump, systemd service ve remote node discovery yoktur.
+- Relay kaydı tam olarak bir yerel Mac otoritesini ve onun eşlenmiş companion cihazlarını temsil eder.
+- Companion revoke yeni event/karar zarfı kabulünü anında durdurur.
 
 ## 4.19 iPhone companion — P1
 
 Ana tab'lar:
 
-- **Home:** node health ve önemli durumlar.
+- **Home:** eşlenmiş Mac sağlığı ve önemli durumlar.
 - **Active:** aktif session'lar.
 - **Inbox:** approval/question/plan.
 - **History:** son session'lar.
@@ -1316,7 +1297,7 @@ Notification category'leri:
 - `SESSION_COMPLETED`: Open, Mute Project.
 - `SESSION_FAILED`: Review, Open Mac.
 - `SESSION_LONG_RUNNING`: Open, Mute 1h.
-- `NODE_OFFLINE`: Open Nodes.
+- `MAC_OFFLINE`: Open Mac Status.
 
 APNs payload açık metinde hassas komut taşımayacaktır. Notification Service Extension şifreli zarfı çözdükten sonra cihazda içerik üretir. Extension key'e ulaşamazsa genel “AgentControl'da yeni bir istek var” bildirimi gösterir.
 
@@ -1369,7 +1350,7 @@ APNs payload açık metinde hassas komut taşımayacaktır. Notification Service
 - Path masking.
 - Branch name paylaşımını kapatma.
 - Command preview redaction.
-- Remote notification content level:
+- Companion notification content level:
   - Generic.
   - Project only.
   - Safe summary.
@@ -1445,7 +1426,7 @@ SDK gereksinimleri:
 ## 5.1 Üst düzey mimari
 
 ```text
-Codex app-server / Official Hooks / IDE Extension / Remote Node
+Codex app-server / Official Hooks / IDE Extension
                             │
                             ▼
                  AgentControlHook / Adapter
@@ -1485,7 +1466,7 @@ Codex app-server / Official Hooks / IDE Extension / Remote Node
 
 ### ADR-001 — Local-first
 
-Uygulamanın temel izleme ve yerel onay işlevleri hesap veya relay olmadan çalışır. Remote mode isteğe bağlıdır.
+Uygulamanın temel izleme ve yerel onay işlevleri hesap veya relay olmadan çalışır. Companion erişimi isteğe bağlıdır.
 
 ### ADR-002 — Ayrı helper zorunludur
 
@@ -1601,7 +1582,7 @@ Raw provider payload domain modele sızdırılmaz; adapter diagnostics alanında
 
 ## 5.4 Event envelope
 
-Tüm local/remote event'ler aşağıdaki ortak zarfa çevrilir:
+Tüm yerel agent event'leri aşağıdaki ortak zarfa çevrilir:
 
 ```json
 {
@@ -1746,11 +1727,11 @@ Kritik kural: `Approve` dokunulması `applied` anlamına gelmez. UI önce `Sendi
 - Low: notification action ile, cihaz kilidi/authentication required.
 - Medium: notification action yalnızca kullanıcı ayarı açıksa; aksi halde app review.
 - High: app + Face ID + hold-to-approve.
-- Critical: remote approve kapalı; Deny veya Open Mac.
+- Critical: companion cihazdan approve kapalı; Deny veya Open Mac.
 - Mac offline: karar `pendingDelivery` olabilir fakat başarı gösterilmez.
 - Request expiry sonrası karar kabul edilmez.
 - Aynı request'e iki cihaz karar verirse helper ilk geçerli revision'ı uygular; diğerine `superseded` döner.
-- “Approve always/session” remote cihazda 1.0'da yoktur.
+- “Approve always/session” companion cihazda 1.0'da yoktur.
 
 ## 5.9 Veri tabanı şeması
 
@@ -1762,6 +1743,7 @@ Kritik kural: `Approve` dokunulması `applied` anlamına gelmez. UI önce `Sendi
 
 ### `nodes`
 
+- Wire/schema uyumluluğu için adı korunur; 1.0'da yalnızca tek yerel Mac kaydı bulunur ve remote-node discovery/pairing yapılmaz.
 - id.
 - display_name.
 - platform.
@@ -1982,7 +1964,7 @@ Kurallar:
 - Exit code semantiği fixture ve contract testleriyle doğrulanır.
 - Decision ve reason alanları provider şemasından üretilir.
 
-## 5.17 Remote relay protokolü
+## 5.17 Companion relay protokolü
 
 Zarf başlığı:
 
@@ -2012,7 +1994,7 @@ API taslağı:
 - `POST /v1/pairing/sessions/:id/complete`.
 - `GET /v1/devices`.
 - `DELETE /v1/devices/:id`.
-- `POST /v1/nodes/register`.
+- `POST /v1/macs/register` (hesap başına tek execution authority).
 - `GET /v1/ws?device_id=...`.
 - `POST /v1/envelopes`.
 - `GET /v1/envelopes/pending`.
@@ -2200,7 +2182,7 @@ Production kodunda `fatalError`, `try!` ve force unwrap yalnızca gerçekten unr
 ## 5.28 Privacy sınıfları
 
 - `publicMetadata`: agent adı, generic state.
-- `privateMetadata`: project adı, branch, node adı.
+- `privateMetadata`: project adı, branch, yerel Mac adı.
 - `sensitive`: command, path, question text.
 - `secret`: token, credential, secret answer; persist/relay edilmez veya yalnızca zorunlu cihaz-local secure path.
 
@@ -2271,7 +2253,7 @@ Her event field'i privacy class taşır. Notification, log, export ve relay seri
 - Oversized/deep JSON.
 - Malformed frame.
 - Log redaction snapshot.
-- Critical remote approval rejection.
+- Critical companion approval rejection.
 
 ### Performance
 
@@ -2315,7 +2297,7 @@ Bir feature tamamlanmış sayılmak için:
 
 # 6 — Implementation phases
 
-Fazlar sırayla yürütülür. Bir sonraki faza geçmek için önceki fazın kabul kriterleri geçmelidir. UI geliştirmesi gerçek agent'a bağımlı kalmaması için ilk günden Fake Agent Simulator ile yapılır.
+Fazlar sırayla yürütülür. Bir sonraki faza geçmek için önceki fazın kabul kriterleri geçmelidir. Ürün kapsamından açık bir ADR ile çıkarılan fazlar uygulanmadan atlanabilir. UI geliştirmesi gerçek agent'a bağımlı kalmaması için ilk günden Fake Agent Simulator ile yapılır.
 
 ## Faz doğrulama durumu
 
@@ -2334,7 +2316,11 @@ commit SHA'sına sahip olmadan `Verified` işaretlenmez. 18 Temmuz 2026 düzeltm
 | 6 | Blocked | Kurulu provider'larda canlı install/repair/uninstall smoke çalıştırılmadı |
 | 7 | Blocked | Hotkey düzeltildi; release UI first-render/scroll ölçümü bekleniyor |
 | 8 | Blocked | Soru/plan ve callback contract düzeltildi; gerçek notification → provider ack smoke bekleniyor |
-| 9 | Not started | Faz 0–8 kapısı geçmeden başlanmaz |
+| 9 | Implemented, pending verification | Otomatik test/kontrat mevcut; Faz 0–8 release kapıları, manuel UI/security smoke ve commit SHA bekleniyor |
+| 10 | Implemented, pending verification | Terminal/IDE planner, güvenli izin fallback'leri, atomik onboarding, Integration Manager ve uzantı mevcut; gerçek uygulamalarda exact-pane/uninstall smoke ile önceki faz kapıları bekleniyor |
+| 11 | Not applicable — scope removed | ADR 0017: ürün tek yerel Mac ile sınırlı; remote node/SSH uygulanmayacak |
+| 12 | Implemented, pending verification | Vapor/PostgreSQL/Redis relay, SIWA/JWKS auth, E2E companion crypto, replay/revoke/APNs kontrolleri ve otomatik testler mevcut; staging Apple/APNs/Redis smoke ile commit SHA bekleniyor |
+| 13 | Implemented, pending verification | iOS companion ekranları, SIWA, QR/fingerprint eşleme, Keychain anahtarları, E2E inbox/outbox, notification action/decrypt, Face ID + hold, deep link/privacy/revoke ve otomatik testler mevcut; fiziksel cihaz Apple/APNs/Face ID smoke ile commit SHA bekleniyor |
 
 ## Faz 0 — Repository bootstrap ve kararların sabitlenmesi
 
@@ -2379,7 +2365,7 @@ UI ve entegrasyonlardan bağımsız, deterministik çekirdeği kurmak.
 ### İşler
 
 - Strong ID type'ları.
-- Session, turn, tool, approval, question, node ve project modelleri.
+- Session, turn, tool, approval, question, yerel Mac kimliği ve project modelleri.
 - `AgentEvent` enum ve versioned `EventEnvelope`.
 - Session state machine ve transition guard'ları.
 - Approval lifecycle.
@@ -2405,7 +2391,7 @@ UI ve entegrasyonlardan bağımsız, deterministik çekirdeği kurmak.
 - Domain target Apple UI framework import etmiyor.
 - `%90+` line coverage hedefi; kritik state/risk branch'leri `%100`.
 - Unknown event state machine'i crash ettirmiyor.
-- Critical risk örnekleri remote-approvable olamıyor.
+- Critical risk örnekleri companion cihazdan onaylanamıyor.
 
 ## Faz 2 — SQLite persistence ve migration altyapısı
 
@@ -2670,13 +2656,13 @@ Bildirimden doğru çalışma bağlamına dönmeyi ve güvenli kurulumu tamamlam
 - Onboarding yarıda kesilince config bozulmuyor.
 - Uninstall yalnızca AgentControl değişikliklerini kaldırıyor.
 
-## Faz 11 — Remote node ve SSH
+## Faz 11 — Remote node ve SSH (kapsamdan çıkarıldı)
 
 ### Amaç
 
-Başka Mac/Linux makinelerde çalışan agent'ları aynı control center'a eklemek.
+Bu fazın özgün amacı başka Mac/Linux makinelerde çalışan agent'ları aynı control center'a eklemekti. ADR 0017 ile ürün tek yerel Mac'e sınırlandığı için faz uygulanmadan atlanır.
 
-### İşler
+### Uygulanmayacak işler
 
 - `AgentControlRemoteNode` service.
 - Node identity/pairing.
@@ -2690,11 +2676,10 @@ Başka Mac/Linux makinelerde çalışan agent'ları aynı control center'a eklem
 
 ### Kabul kriterleri
 
-- Remote node offline/online state doğru.
-- Pending request expiry sonrası uygulanmıyor.
-- Node revoke yeni event/decision kabul etmiyor.
-- Ağ kesintisinde duplicate event yok.
-- Remote path local path olarak açılmıyor.
+- Remote node/SSH target'ı, build flag'i, ayarı veya kullanıcı arayüzü yoktur.
+- Faz 12 doğrudan yerel Mac helper'ı ile iPhone companion arasında E2E relay kurar.
+- Mevcut `NodeID`/`nodes` adları wire/schema uyumluluğu için yalnızca yerel Mac kimliği olarak kalabilir; remote-node yeteneği ifade etmez.
+- Agent çalıştırma ve provider acknowledgment otoritesi yalnızca yerel Mac helper'ıdır.
 
 ## Faz 12 — Relay backend, auth ve E2E pairing
 
@@ -2708,7 +2693,7 @@ Telefon erişimini içerik göremeyen güvenli relay ile sağlamak.
 - Sign in with Apple token verification.
 - Access/refresh token ve device sessions.
 - Pairing endpoints.
-- Device/node registry.
+- Companion device/local Mac registry.
 - WebSocket gateway.
 - Encrypted envelope store/forward.
 - Redis presence/short queue.
@@ -2748,7 +2733,7 @@ Güvenli telefon kontrolünü production kalitesinde tamamlamak.
 - Sign in with Apple.
 - QR/pairing UI ve fingerprint confirmation.
 - Device key storage.
-- Nodes, Active, Inbox, Session Detail, History.
+- Mac Status, Active, Inbox, Session Detail, History.
 - Notification Service Extension decrypt/render.
 - Action categories ve text reply.
 - Decision signing/encryption/outbox.
@@ -2762,7 +2747,7 @@ Güvenli telefon kontrolünü production kalitesinde tamamlamak.
 
 - Low/Medium notification action policy'ye göre çalışıyor.
 - High uygulama açmadan approve edilemiyor.
-- Critical uzaktan approve edilemiyor.
+- Critical companion cihazdan approve edilemiyor.
 - Face ID failure/cancel güvenli fallback.
 - Mac provider acknowledgment gelmeden success gösterilmiyor.
 - Extension decrypt edemediğinde generic notification çıkıyor.
@@ -2874,7 +2859,7 @@ Tekrarlanabilir ve doğrulanabilir dağıtım sürecini kurmak.
 - P0 ve P1 kapsamı tamam.
 - Codex/Claude/Gemini destek matrisi yayınlanmış.
 - Local-only mode hesap olmadan test edilmiş.
-- Remote E2E security testleri geçmiş.
+- Companion E2E security testleri geçmiş.
 - macOS notarized stable ve iOS production review gereksinimleri hazır.
 - Critical/High açık hata yok.
 - Supportable diagnostic ve recovery araçları mevcut.
@@ -2901,7 +2886,7 @@ Codex bu projeyi uygularken:
 - **M0 — Core:** Faz 0–4; fake agent uçtan uca.
 - **M1 — Codex Alpha:** Faz 5 ve temel Faz 7; gerçek Codex managed session.
 - **M2 — Multi-Agent Mac Alpha:** Faz 6–10.
-- **M3 — Remote Alpha:** Faz 11–13.
+- **M3 — Companion Alpha:** Faz 11 kapsam dışı; Faz 12–13.
 - **M4 — Feature Complete:** Faz 14.
 - **M5 — Release Candidate:** Faz 15–16.
 - **1.0:** Faz 17 release gate.
@@ -2942,8 +2927,7 @@ SPARKLE_FEED_URL=https://updates.example.com/appcast.xml
 SPARKLE_PUBLIC_ED_KEY=PUBLIC_KEY_ONLY
 CERT_PIN_SHA256=
 SENTRY_DSN=
-FEATURE_REMOTE_MODE=YES
-FEATURE_SSH=YES
+FEATURE_COMPANION_ACCESS=YES
 FEATURE_WATCH=YES
 FEATURE_DIRECT_LAN=NO
 FEATURE_TELEMETRY=NO
@@ -3024,25 +3008,9 @@ Kurallar:
 - Hook absolute executable path ile çağrılır.
 - Debug log stdout'a yazılmaz.
 
-## 7.6 Remote node environment
+## 7.6 Yerel Mac companion kimliği
 
-```text
-AGENTCONTROL_NODE_ENV=development|production
-AGENTCONTROL_NODE_ID=uuid
-AGENTCONTROL_NODE_DISPLAY_NAME=Build-Mac
-AGENTCONTROL_NODE_DATA_DIR=/home/user/.local/share/agentcontrol
-AGENTCONTROL_NODE_SOCKET_PATH=/run/user/1000/agentcontrol.sock
-AGENTCONTROL_RELAY_BASE_URL=https://relay.example.com
-AGENTCONTROL_RELAY_WS_URL=wss://relay.example.com/v1/ws
-AGENTCONTROL_NODE_CREDENTIAL_FILE=/secure/path/credential
-AGENTCONTROL_NODE_LOG_LEVEL=info
-AGENTCONTROL_NODE_HEARTBEAT_SECONDS=30
-AGENTCONTROL_NODE_OFFLINE_QUEUE_LIMIT=10000
-AGENTCONTROL_NODE_ENVELOPE_TTL_SECONDS=300
-AGENTCONTROL_NODE_ALLOWED_ADAPTERS=codex,claude,gemini
-```
-
-Credential file mode `0600` olmalı ve systemd/launchd user service çalıştıran kullanıcıya ait olmalıdır. Mümkün olan platformlarda credential Keychain/secret service kullanılır.
+`AGENTCONTROL_NODE_ID`, hook/event protokolündeki mevcut alan adı olarak yalnızca yerel Mac'in kararlı kimliğini taşır. Remote node executable'ı veya ona özel environment/credential dosyası yoktur. Companion relay anahtarları macOS Keychain'de tutulur.
 
 ## 7.7 Relay server environment
 
@@ -3213,7 +3181,6 @@ Aşağıdaki değerler environment variable olarak değil app settings store'da 
 | Sparkle public key | App config | Yok | Evet, public |
 | Sparkle private key | Yok | CI secret | Hayır |
 | SQLite field key | Keychain | Yok | Hayır |
-| SSH private key | System Keychain/reference | Yok | Hayır |
 | Sentry DSN | Public client config olabilir | Env | DSN public risk değerlendirmesiyle |
 
 ## 7.12 Yapılandırma doğrulama
@@ -3236,4 +3203,4 @@ Uygulama/server başlangıcında:
 
 Codex ilk olarak Faz 0 için repository'yi kurmalı; ardından Faz 1–4 ile Fake Agent Simulator üzerinden tamamen çalışan local event/approval omurgasını üretmelidir. Gerçek agent entegrasyonu bu omurga kanıtlanmadan başlamamalıdır. Codex entegrasyonu referans adapter olarak tamamlandıktan sonra diğer adapter'lar aynı capability ve contract modeline uymalıdır. Telefon özelliği, helper'ın yerel otorite olduğu ve provider acknowledgment kuralının hiçbir yerde ihlal edilmediği E2E relay modeli üzerine kurulmalıdır.
 
-Projenin 1.0 başarısı; çok özellik göstermekten önce doğru oturumu doğru state ile göstermesi, izinleri yanlış uygulamaması, kullanıcı config'ini bozmaması ve remote relay compromise durumunda dahi hassas içeriği korumasıyla ölçülecektir.
+Projenin 1.0 başarısı; çok özellik göstermekten önce doğru oturumu doğru state ile göstermesi, izinleri yanlış uygulamaması, kullanıcı config'ini bozmaması ve companion relay compromise durumunda dahi hassas içeriği korumasıyla ölçülecektir.

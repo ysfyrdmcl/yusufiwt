@@ -1,4 +1,5 @@
 #if os(macOS)
+    import AgentDomain
     import AgentLocalIPC
     import Foundation
     @preconcurrency import UserNotifications
@@ -8,6 +9,7 @@
         case question = "AGENTCONTROL_QUESTION"
         case secretQuestion = "AGENTCONTROL_SECRET_QUESTION"
         case plan = "AGENTCONTROL_PLAN"
+        case alert = "AGENTCONTROL_ALERT"
     }
 
     public enum MacNotificationAction: String, Sendable {
@@ -43,6 +45,7 @@
         private let center: UNUserNotificationCenter
         private var preferences: MacNotificationPreferences
         private var deduplicator = NotificationDeduplicator()
+        private var deliveredAlertIDs: Set<String> = []
 
         public init(
             center: UNUserNotificationCenter = .current(),
@@ -70,7 +73,9 @@
         }
 
         public func reconcile(_ decisions: [PendingHookDecision], now: Date = Date()) async {
-            guard authorizationState != .denied else { return }
+            guard authorizationState != .denied else {
+                return
+            }
             deduplicator.reconcile(active: decisions)
             let activeIdentifiers = Set(decisions.map(Self.identifier))
             let pending = await center.pendingNotificationRequests()
@@ -100,6 +105,30 @@
                     identifier: Self.identifier(decision),
                     content: content,
                     trigger: nil
+                ))
+            }
+        }
+
+        public func reconcile(_ alerts: [SessionAlert], now: Date = Date()) async {
+            guard authorizationState != .denied else { return }
+            let activeIDs = Set(alerts.map(\.id))
+            deliveredAlertIDs.formIntersection(activeIDs)
+            let policy = MacNotificationPolicy.delivery(preferences: preferences, at: now)
+            guard policy != .suppress else {
+                return
+            }
+            for alert in alerts where deliveredAlertIDs.insert(alert.id).inserted {
+                let content = UNMutableNotificationContent()
+                content.title = "AgentControl"
+                content.body = "\(alert.kind.rawValue): \(Int(alert.observedDurationSeconds / 60)) min"
+                content.categoryIdentifier = MacNotificationCategory.alert.rawValue
+                content.threadIdentifier = alert.sessionID.description
+                content.interruptionLevel = preferences.focusAware ? .passive : .active
+                if policy == .deliverWithSound {
+                    content.sound = .default
+                }
+                try? await center.add(UNNotificationRequest(
+                    identifier: "agentcontrol.alert.\(alert.id)", content: content, trigger: nil
                 ))
             }
         }
@@ -157,7 +186,8 @@
                 ),
                 UNNotificationCategory(identifier: MacNotificationCategory.question.rawValue, actions: [review, terminal], intentIdentifiers: []),
                 UNNotificationCategory(identifier: MacNotificationCategory.secretQuestion.rawValue, actions: [terminal], intentIdentifiers: []),
-                UNNotificationCategory(identifier: MacNotificationCategory.plan.rawValue, actions: [approve, deny, review, terminal], intentIdentifiers: [])
+                UNNotificationCategory(identifier: MacNotificationCategory.plan.rawValue, actions: [approve, deny, review, terminal], intentIdentifiers: []),
+                UNNotificationCategory(identifier: MacNotificationCategory.alert.rawValue, actions: [review], intentIdentifiers: [])
             ]
         }
 

@@ -18,17 +18,21 @@
         }
 
         public static func userDefault(fileManager: FileManager = .default) throws -> AgentControlPaths {
-            let base: URL = if let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.yusuf.agentcontrol") {
-                group.appendingPathComponent("Library/Application Support/AgentControl", isDirectory: true)
-            } else {
-                try fileManager.url(
-                    for: .applicationSupportDirectory,
-                    in: .userDomainMask,
-                    appropriateFor: nil,
-                    create: true
-                ).appendingPathComponent("AgentControl", isDirectory: true)
+            let appSupport = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            ).appendingPathComponent("AgentControl", isDirectory: true)
+            if let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.yusuf.agentcontrol") {
+                let groupBase = group.appendingPathComponent("Library/Application Support/AgentControl", isDirectory: true)
+                let groupPaths = AgentControlPaths(baseDirectory: groupBase)
+                let address = sockaddr_un()
+                if groupPaths.socketURL.path.utf8.count < MemoryLayout.size(ofValue: address.sun_path) {
+                    return groupPaths
+                }
             }
-            return AgentControlPaths(baseDirectory: base)
+            return AgentControlPaths(baseDirectory: appSupport)
         }
 
         public func prepare(fileManager: FileManager = .default) throws {

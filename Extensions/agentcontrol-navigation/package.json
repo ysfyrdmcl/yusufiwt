@@ -1,0 +1,37 @@
+{
+  "name": "agentcontrol-navigation",
+  "displayName": "AgentControl Navigation",
+  "description": "Reveals the exact VS Code or Cursor terminal associated with an AgentControl session.",
+  "version": "1.0.0",
+  "publisher": "yusuf",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ysfyrdmcl/yusufiwt.git",
+    "directory": "Extensions/agentcontrol-navigation"
+  },
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onUri",
+    "onCommand:agentcontrol.captureTerminalContext",
+    "onCommand:agentcontrol.registerTerminal"
+  ],
+  "main": "./dist/extension.js",
+  "files": ["dist", "README.md", "LICENSE"],
+  "contributes": {
+    "commands": [
+      { "command": "agentcontrol.captureTerminalContext", "title": "AgentControl: Capture Active Terminal" },
+      { "command": "agentcontrol.registerTerminal", "title": "AgentControl: Register Active Terminal" }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.6.0",
+    "typescript": "^5.5.0"
+  }
+}

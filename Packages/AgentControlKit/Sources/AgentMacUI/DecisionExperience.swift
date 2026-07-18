@@ -86,18 +86,4 @@
         }
     }
 
-    @MainActor
-    public enum TerminalFallback {
-        public static func open(for decision: PendingHookDecision) {
-            let bundleID = decision.terminalContext?.applicationBundleID
-            if let bundleID, let applicationURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                let configuration = NSWorkspace.OpenConfiguration()
-                NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration)
-                return
-            }
-            if let root = decision.projectRootURL {
-                NSWorkspace.shared.open(root)
-            }
-        }
-    }
 #endif

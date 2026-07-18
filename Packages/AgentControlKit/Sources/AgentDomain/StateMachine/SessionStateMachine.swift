@@ -1,4 +1,4 @@
-public enum SessionState: String, Codable, Sendable, CaseIterable {
+public enum SessionState: String, Codable, Sendable, CaseIterable, Hashable {
     case discovered
     case starting
     case thinking

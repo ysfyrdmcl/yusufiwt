@@ -13,7 +13,8 @@ extension DatabaseActor {
 
     func insertEvent(_ envelope: EventEnvelope, connection: SQLiteConnection) throws {
         guard envelope.privacyClass != .secret else { throw PersistenceError.secretPersistenceForbidden }
-        let rawPayload = try encoder.encode(envelope.payload)
+        let filteredPayload = EventPayloadPrivacyFilter.filter(envelope.payload, settings: cachedPrivacySettings)
+        let rawPayload = try encoder.encode(filteredPayload)
         let context = Data(envelope.eventID.description.utf8)
         let encrypted = envelope.privacyClass == .sensitive
         let payload = try encrypted ? cipher.encrypt(rawPayload, context: context) : rawPayload

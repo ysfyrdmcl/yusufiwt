@@ -5,6 +5,8 @@ included:
   - Packages
 excluded:
   - .build
+  - Packages/AgentControlKit/.build
+  - Services/AgentControlRelay/.build
   - AgentControl.xcodeproj
 disabled_rules:
   - trailing_comma

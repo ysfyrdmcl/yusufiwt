@@ -1,4 +1,5 @@
 #if os(macOS)
+    import AgentDomain
     import AgentPersistence
     import Foundation
 
@@ -60,7 +61,10 @@
                     return .heartbeat(HelperHeartbeat(sequence: heartbeatSequence, emittedAt: now()))
                 case let .submitEvent(submission):
                     return try await .eventAccepted(registry.ingest(submission))
-                case .requestDecision, .pendingDecisions, .resolveDecision, .listSessions, .sessionSnapshot, .sessionEvents:
+                case .requestDecision, .pendingDecisions, .resolveDecision, .listSessions, .sessionSnapshot,
+                     .sessionEvents, .history, .analytics, .listRules, .upsertRule, .deleteRule,
+                     .activeAlerts, .privacySettings, .savePrivacySettings, .diagnostics, .repair,
+                     .deleteCompletedHistory:
                     return .failure(code: "helper.internal_routing", safeMessage: "The helper could not route the request.")
                 case .prepareForUpdate:
                     return try await .updateHandoff(prepareForUpdate())
@@ -70,10 +74,35 @@
             }
         }
 
+        // Routing stays centralized so every operation crosses the same helper authority boundary.
+        // swiftlint:disable:next cyclomatic_complexity function_body_length
         private func handleRoutedRequest(_ request: HelperRequest) async throws -> HelperResponse? {
             switch request {
             case let .requestDecision(decisionRequest):
                 _ = try await registry.ingest(decisionRequest.submission)
+                if decisionRequest.kind == .approval, let approval = PendingHookDecision(request: decisionRequest).approval {
+                    let rules = try await database.automationRules(enabledOnly: true)
+                    switch OperationsRuleEngine.automation(
+                        for: approval,
+                        session: decisionRequest.submission.initialSession,
+                        rules: rules
+                    ) {
+                    case let .allow(ruleID):
+                        try await database.appendAudit(AuditEntry(
+                            id: UUID(), category: "automation", action: "allowed.lowRisk",
+                            targetID: approval.id.description,
+                            metadata: JSONEncoder().encode(["ruleID": ruleID.uuidString.lowercased()]),
+                            createdAt: now()
+                        ))
+                        return .decision(HookDecisionResult(
+                            requestID: decisionRequest.requestID,
+                            revision: decisionRequest.revision,
+                            decision: .approve
+                        ))
+                    case .requireHuman:
+                        break
+                    }
+                }
                 return await decisions.wait(for: decisionRequest)
             case .pendingDecisions:
                 return await .pendingDecisions(decisions.pending())
@@ -85,6 +114,67 @@
                 return try await .sessionSnapshot(database.session(id: id))
             case let .sessionEvents(sessionID, limit):
                 return try await .sessionEvents(database.events(sessionID: sessionID, limit: limit))
+            case let .history(query):
+                return try await .history(database.history(query))
+            case let .analytics(query):
+                let settings = try await database.privacySettings()
+                guard settings.analyticsEnabled else {
+                    return .failure(code: "analytics.disabled", safeMessage: "Analytics is disabled in privacy settings.")
+                }
+                return try await .analytics(database.analytics(query))
+            case .listRules:
+                return try await .rules(database.rules())
+            case let .upsertRule(rule):
+                try await database.upsertRule(rule)
+                return .ruleSaved(rule)
+            case let .deleteRule(id):
+                return try await .ruleDeleted(database.deleteRule(id: id))
+            case .activeAlerts:
+                let snapshots = try await database.activeSessionSnapshots()
+                let rules = try await database.alertRules(enabledOnly: true)
+                return .activeAlerts(OperationsRuleEngine.alerts(
+                    for: snapshots,
+                    rules: rules,
+                    clock: FixedAgentClock(now: now(), monotonicNanoseconds: 0)
+                ))
+            case .privacySettings:
+                return try await .privacySettings(database.privacySettings())
+            case let .savePrivacySettings(settings):
+                try await database.savePrivacySettings(settings, at: now())
+                return .privacySettings(settings)
+            case .diagnostics:
+                let report = try await database.diagnostics(at: now())
+                let pendingCount = await decisions.pending().count
+                let spoolCount = try await spool.pendingCount()
+                let helperChecks = report.checks + [
+                    DiagnosticCheck(
+                        id: "helper.socket",
+                        status: socketAcceptingConnections ? .healthy : .warning,
+                        safeSummary: socketAcceptingConnections
+                            ? "Hook socket is accepting connections."
+                            : "Hook socket is not accepting connections."
+                    ),
+                    DiagnosticCheck(
+                        id: "helper.spool",
+                        status: spoolCount == 0 ? .healthy : .warning,
+                        safeSummary: "Hook spool queue was checked."
+                    ),
+                    DiagnosticCheck(
+                        id: "helper.decisions",
+                        status: .healthy,
+                        safeSummary: "\(pendingCount) decision requests are pending."
+                    )
+                ]
+                return .diagnostics(DiagnosticsReport(
+                    generatedAt: report.generatedAt, checks: helperChecks,
+                    activeSessionCount: report.activeSessionCount,
+                    persistedEventCount: report.persistedEventCount,
+                    schemaVersion: report.schemaVersion
+                ))
+            case let .repair(action):
+                return try await .repair(database.repair(action, now: now()))
+            case let .deleteCompletedHistory(cutoff):
+                return try await .dataDeletion(database.deleteCompletedHistory(endedBefore: cutoff))
             default:
                 return nil
             }

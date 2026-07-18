@@ -4,11 +4,12 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
 
-if find . -type f \
-  ! -path './.git/*' \
-  ! -path './.build/*' \
-  ! -path './AgentControl.xcodeproj/*' \
-  \( -name '*.p8' -o -name '*.p12' -o -name '*.key' -o -name 'Local.xcconfig' -o -name '.env' \) | grep -q .; then
+secret_file=$(find . \
+  \( -type d \( -name .git -o -name .build -o -name AgentControl.xcodeproj \) -prune \) -o \
+  \( -type f \( -name '*.p8' -o -name '*.p12' -o -name '*.key' -o -name 'Local.xcconfig' -o -name '.env' \) -print \) \
+  | sed -n '1p')
+
+if [ -n "$secret_file" ]; then
   echo 'tracked-secret-shaped file found' >&2
   exit 1
 fi
