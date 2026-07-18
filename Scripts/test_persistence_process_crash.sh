@@ -5,7 +5,7 @@ work_dir=$(mktemp -d /private/tmp/agentcontrol-persistence-crash.XXXXXX)
 database="$work_dir/agent-control.sqlite"
 trap 'rm -rf "$work_dir"' EXIT INT TERM
 
-sqlite3 "$database" <<'SQL'
+sqlite3 "$database" >/dev/null <<'SQL'
 PRAGMA journal_mode=WAL;
 PRAGMA synchronous=FULL;
 CREATE TABLE session_events(event_id TEXT PRIMARY KEY, sequence INTEGER NOT NULL);

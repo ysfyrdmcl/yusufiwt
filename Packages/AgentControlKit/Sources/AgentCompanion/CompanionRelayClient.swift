@@ -118,6 +118,40 @@ public actor CompanionRelayClient {
         try await performWithoutBody(request)
     }
 
+    public func registerLiveActivityToken(
+        id: UUID,
+        sessionID: UUID,
+        token: String,
+        environment: String,
+        expiresAt: Date
+    ) async throws {
+        var request = try makeRequest(path: "v1/live-activities/tokens", method: "POST")
+        request.httpBody = try CompanionCoding.makeEncoder().encode(
+            LiveActivityTokenBody(
+                id: id, sessionID: sessionID, token: token,
+                environment: environment, expiresAt: expiresAt
+            )
+        )
+        try await performWithoutBody(request)
+    }
+
+    public func updateLiveActivity(
+        recipientDeviceID: UUID,
+        sessionID: UUID,
+        state: String,
+        updatedAt: Date,
+        staleAt: Date
+    ) async throws {
+        var request = try makeRequest(path: "v1/live-activities/update", method: "POST")
+        request.httpBody = try CompanionCoding.makeEncoder().encode(
+            LiveActivityUpdateBody(
+                recipientDeviceID: recipientDeviceID, sessionID: sessionID,
+                state: state, updatedAt: updatedAt, staleAt: staleAt
+            )
+        )
+        try await performWithoutBody(request)
+    }
+
     public func pending(after cursor: UInt64) async throws -> (envelopes: [SealedRelayEnvelope], cursor: UInt64) {
         let response: PendingBody = try await perform(
             makeRequest(path: "v1/envelopes/pending?after=\(cursor)", method: "GET")
@@ -174,6 +208,22 @@ public actor CompanionRelayClient {
     private struct RefreshBody: Codable { let refreshToken: String }
     private struct PairingBody: Codable { let phoneEphemeralPublicKey: Data }
     private struct PushTokenBody: Codable { let id: UUID; let token: String; let environment: String }
+    private struct LiveActivityTokenBody: Codable {
+        let id: UUID
+        let sessionID: UUID
+        let token: String
+        let environment: String
+        let expiresAt: Date
+    }
+
+    private struct LiveActivityUpdateBody: Codable {
+        let recipientDeviceID: UUID
+        let sessionID: UUID
+        let state: String
+        let updatedAt: Date
+        let staleAt: Date
+    }
+
     private struct PendingBody: Codable { let envelopes: [SealedRelayEnvelope]; let cursor: UInt64 }
 }
 

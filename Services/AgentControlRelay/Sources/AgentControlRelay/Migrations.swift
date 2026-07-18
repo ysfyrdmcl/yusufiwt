@@ -44,3 +44,27 @@ struct CreateRelaySchema: AsyncMigration {
         try await database.schema(UserModel.schema).delete()
     }
 }
+
+struct CreateLiveActivityTokenSchema: AsyncMigration {
+    func prepare(on database: any Database) async throws {
+        try await database.schema(LiveActivityTokenModel.schema)
+            .id()
+            .field(
+                "device_id", .uuid, .required,
+                .references(DeviceModel.schema, "id", onDelete: .cascade)
+            )
+            .field("session_id", .uuid, .required)
+            .field("token_hash", .string, .required)
+            .field("token_ciphertext", .data, .required)
+            .field("environment", .string, .required)
+            .field("expires_at", .datetime, .required)
+            .field("updated_at", .datetime)
+            .unique(on: "device_id", "session_id")
+            .unique(on: "token_hash")
+            .create()
+    }
+
+    func revert(on database: any Database) async throws {
+        try await database.schema(LiveActivityTokenModel.schema).delete()
+    }
+}

@@ -22,6 +22,20 @@ public struct DisabledPushProvider: PushNotificationProviding {
     }
 }
 
+public protocol LiveActivityPushProviding: Sendable {
+    func sendLiveActivityUpdate(_ update: LiveActivityUpdateRequest, to token: String) async -> APNSDeliveryResult
+}
+
+public struct DisabledLiveActivityPushProvider: LiveActivityPushProviding {
+    public init() {}
+    public func sendLiveActivityUpdate(
+        _ update: LiveActivityUpdateRequest,
+        to token: String
+    ) async -> APNSDeliveryResult {
+        .retryable
+    }
+}
+
 public protocol APNSBearerTokenProviding: Sendable {
     func bearerToken(now: Date) async throws -> String
 }
@@ -109,6 +123,91 @@ public struct HTTPAPNSProvider: PushNotificationProviding {
     }
 }
 
+public struct HTTPAPNSLiveActivityProvider: LiveActivityPushProviding {
+    private let client: any Client
+    private let bearerTokens: any APNSBearerTokenProviding
+    private let topic: String
+    private let host: String
+
+    public init(
+        client: any Client,
+        bearerTokens: any APNSBearerTokenProviding,
+        topic: String,
+        production: Bool
+    ) {
+        self.client = client
+        self.bearerTokens = bearerTokens
+        self.topic = topic
+        host = production ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com"
+    }
+
+    public func sendLiveActivityUpdate(
+        _ update: LiveActivityUpdateRequest,
+        to token: String
+    ) async -> APNSDeliveryResult {
+        do {
+            let bearer = try await bearerTokens.bearerToken(now: Date())
+            let response = try await client.post(URI(string: "\(host)/3/device/\(token)")) { request in
+                request.headers.bearerAuthorization = .init(token: bearer)
+                request.headers.replaceOrAdd(name: "apns-topic", value: topic)
+                request.headers.replaceOrAdd(name: "apns-push-type", value: "liveactivity")
+                request.headers.replaceOrAdd(name: "apns-priority", value: "10")
+                try request.content.encode(LiveActivityAPNSPayload(update: update))
+            }
+            switch response.status.code {
+            case 200: return .accepted
+            case 400, 410: return .invalidToken
+            case 429, 500 ... 599: return .retryable
+            default: return .permanentFailure("apns-liveactivity-status-\(response.status.code)")
+            }
+        } catch {
+            return .retryable
+        }
+    }
+}
+
+struct LiveActivityAPNSContentState: Codable {
+    let state: String
+    let updatedAtEpochSeconds: Int
+    let staleAtEpochSeconds: Int
+}
+
+struct LiveActivityAPNSBody: Codable {
+    let timestamp: Int
+    let event: String
+    let contentState: LiveActivityAPNSContentState
+    let staleDate: Int
+    let dismissalDate: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp, event
+        case contentState = "content-state"
+        case staleDate = "stale-date"
+        case dismissalDate = "dismissal-date"
+    }
+}
+
+struct LiveActivityAPNSPayload: Content {
+    let aps: LiveActivityAPNSBody
+
+    init(update: LiveActivityUpdateRequest) {
+        let terminal = ["completed", "failed", "cancelled"].contains(update.state)
+        let updated = Int(update.updatedAt.timeIntervalSince1970)
+        let stale = Int(update.staleAt.timeIntervalSince1970)
+        aps = LiveActivityAPNSBody(
+            timestamp: updated,
+            event: terminal ? "end" : "update",
+            contentState: .init(
+                state: update.state,
+                updatedAtEpochSeconds: updated,
+                staleAtEpochSeconds: stale
+            ),
+            staleDate: stale,
+            dismissalDate: terminal ? updated + 60 : nil
+        )
+    }
+}
+
 private struct APNSPayloadAPS: Codable {
     struct Alert: Codable { let title: String; let body: String }
     let mutableContent: Int
@@ -186,6 +285,7 @@ public struct RedisEphemeralProvider: PresenceProviding, TransientEnvelopeQueuei
 }
 
 private struct PushProviderKey: StorageKey { typealias Value = any PushNotificationProviding }
+private struct LiveActivityPushProviderKey: StorageKey { typealias Value = any LiveActivityPushProviding }
 private struct PresenceProviderKey: StorageKey { typealias Value = any PresenceProviding }
 private struct TransientQueueKey: StorageKey { typealias Value = any TransientEnvelopeQueueing }
 
@@ -198,6 +298,16 @@ public extension Application {
             return value
         }
         set { storage[PushProviderKey.self] = newValue }
+    }
+
+    var liveActivityPushProvider: any LiveActivityPushProviding {
+        get {
+            guard let value = storage[LiveActivityPushProviderKey.self] else {
+                preconditionFailure("Live Activity push provider was not installed")
+            }
+            return value
+        }
+        set { storage[LiveActivityPushProviderKey.self] = newValue }
     }
 
     var presenceProvider: any PresenceProviding {

@@ -39,10 +39,21 @@ struct AuthController: RouteCollection {
                 agreementPublicKey: input.agreementPublicKey, signingPublicKey: input.signingPublicKey
             )
         guard device.userID == userID, device.revokedAt == nil else { throw Abort(.forbidden) }
+        let rotatesKeys = device.agreementPublicKey != input.agreementPublicKey
+            || device.signingPublicKey != input.signingPublicKey
         device.displayName = input.displayName
         device.agreementPublicKey = input.agreementPublicKey
         device.signingPublicKey = input.signingPublicKey
         try await device.save(on: request.db)
+        if rotatesKeys {
+            // Re-authentication with the account credential is the key-rotation
+            // ceremony. Retire every refresh token tied to the old device keys.
+            try await RefreshTokenModel.query(on: request.db)
+                .filter(\.$deviceID == input.deviceID)
+                .filter(\.$revokedAt == nil)
+                .set(\.$revokedAt, to: Date())
+                .update()
+        }
         return try await issueTokens(
             for: .init(userID: userID, deviceID: input.deviceID, role: input.role), request: request
         )

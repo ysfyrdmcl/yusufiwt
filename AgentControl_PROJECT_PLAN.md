@@ -2321,6 +2321,9 @@ commit SHA'sına sahip olmadan `Verified` işaretlenmez. 18 Temmuz 2026 düzeltm
 | 11 | Not applicable — scope removed | ADR 0017: ürün tek yerel Mac ile sınırlı; remote node/SSH uygulanmayacak |
 | 12 | Implemented, pending verification | Vapor/PostgreSQL/Redis relay, SIWA/JWKS auth, E2E companion crypto, replay/revoke/APNs kontrolleri ve otomatik testler mevcut; staging Apple/APNs/Redis smoke ile commit SHA bekleniyor |
 | 13 | Implemented, pending verification | iOS companion ekranları, SIWA, QR/fingerprint eşleme, Keychain anahtarları, E2E inbox/outbox, notification action/decrypt, Face ID + hold, deep link/privacy/revoke ve otomatik testler mevcut; fiziksel cihaz Apple/APNs/Face ID smoke ile commit SHA bekleniyor |
+| 14 | Implemented, pending verification | Tek seçili Live Activity, Dynamic Island/Lock Screen, active/pending widget'lar, bounded snapshot, WatchConnectivity, yalnız Low-risk Watch approve, iPhone handoff ve Live Activity APNs token/update testleri mevcut; fiziksel iPhone/Watch ve staging APNs smoke ile commit SHA bekleniyor |
+| 15 | Implemented, pending verification | Threat/security checklist, malformed/fuzz ve config-symlink/injection testleri, key rotation/revoke ve APNs partition drill'leri, DB recovery runbook/testleri, 100 session/100k event bütçesi, accessibility/localization/privacy/SBOM kapıları mevcut; release-device Instruments, fiziksel erişilebilirlik, staging partition/advisory scan ve commit SHA bekleniyor |
+| 16 | Implemented, pending verification | Developer ID/Hardened Runtime archive, notarization/stapling, DMG/ZIP, Sparkle EdDSA stable/beta feed, helper hash manifesti, iOS/watchOS TestFlight upload, dSYM/SBOM/checksum ve fail-closed verifier pipeline'ı mevcut; protected signing ortamı, clean-Mac update ve fiziksel TestFlight smoke kanıtı bekleniyor |
 
 ## Faz 0 — Repository bootstrap ve kararların sabitlenmesi
 

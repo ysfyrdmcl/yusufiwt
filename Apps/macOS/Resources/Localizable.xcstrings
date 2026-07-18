@@ -40,6 +40,7 @@
     "inbox.title" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Inbox" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Gelen Kutusu" } } } },
     "menu.active" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Active" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Aktif" } } } },
     "menu.inbox" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Inbox" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Gelen" } } } },
+    "menu.checkForUpdates" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Check for Updates…" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Güncellemeleri Denetle…" } } } },
     "menu.openDashboard" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Open Dashboard" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Dashboard'u Aç" } } } },
     "menu.quit" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Quit AgentControl" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "AgentControl'dan Çık" } } } },
     "menu.status.attention" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "AgentControl needs attention" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "AgentControl ilgi bekliyor" } } } },

@@ -107,3 +107,35 @@ final class PushTokenModel: Model, @unchecked Sendable {
         self.tokenCiphertext = tokenCiphertext; self.environment = environment
     }
 }
+
+final class LiveActivityTokenModel: Model, @unchecked Sendable {
+    static let schema = "relay_live_activity_tokens"
+    @ID(key: .id) var id: UUID?
+    @Field(key: "device_id") var deviceID: UUID
+    @Field(key: "session_id") var sessionID: UUID
+    @Field(key: "token_hash") var tokenHash: String
+    @Field(key: "token_ciphertext") var tokenCiphertext: Data
+    @Field(key: "environment") var environment: String
+    @Field(key: "expires_at") var expiresAt: Date
+    @Timestamp(key: "updated_at", on: .update) var updatedAt: Date?
+
+    init() {}
+
+    init(
+        id: UUID,
+        deviceID: UUID,
+        sessionID: UUID,
+        tokenHash: String,
+        tokenCiphertext: Data,
+        environment: String,
+        expiresAt: Date
+    ) {
+        self.id = id
+        self.deviceID = deviceID
+        self.sessionID = sessionID
+        self.tokenHash = tokenHash
+        self.tokenCiphertext = tokenCiphertext
+        self.environment = environment
+        self.expiresAt = expiresAt
+    }
+}

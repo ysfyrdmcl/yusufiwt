@@ -57,6 +57,7 @@ final class CompanionAppModel: ObservableObject {
     @Published var selectedInboxID: UUID?
     @Published var selectedSessionID: SessionID?
     @Published var pendingPairing: PendingPairingConfirmation?
+    @Published private(set) var pinnedSessionID: SessionID?
     @Published var message: String?
 
     private var localState = CompanionLocalState()
@@ -66,10 +67,22 @@ final class CompanionAppModel: ObservableObject {
     private var pendingIdentity: CompanionIdentity?
     private var appleNonce: String?
     private var pushToken: Data?
+    private let surfaces: CompanionSurfaceCoordinator
 
     private let keyStore = CompanionKeyStore(
         accessGroup: CompanionRuntimeConfiguration.keychainAccessGroup
     )
+
+    init() {
+        surfaces = CompanionSurfaceCoordinator(appGroupID: CompanionRuntimeConfiguration.appGroupID)
+        surfaces.decisionHandler = { [weak self] decision in
+            await self?.handleWatchDecision(decision)
+        }
+        surfaces.liveActivityTokenHandler = { [weak self] sessionID, token in
+            await self?.registerLiveActivityToken(sessionID: sessionID, token: token)
+        }
+        pinnedSessionID = surfaces.selectedSessionID()
+    }
 
     var macDisplayName: String {
         devices.first(where: { $0.role == .localMac })?.displayName ?? String(localized: "status.mac")
@@ -320,6 +333,16 @@ extension CompanionAppModel {
         }
     }
 
+    func toggleLiveActivity(for session: CompanionSessionSummary) async {
+        if pinnedSessionID == session.id {
+            await surfaces.clearSelection()
+            pinnedSessionID = nil
+        } else {
+            await surfaces.select(session, now: Date())
+            pinnedSessionID = surfaces.selectedSessionID()
+        }
+    }
+
     func revoke(_ device: CompanionDeviceRecord) async {
         do {
             try await relay?.revokeDevice(device.id)
@@ -456,6 +479,8 @@ private extension CompanionAppModel {
         inbox = localState.inbox.sorted { $0.createdAt > $1.createdAt }
         sessions = localState.sessions.sorted { $0.updatedAt > $1.updatedAt }
         await synchronizeOutboxSnapshot()
+        await surfaces.publish(sessions: sessions, inbox: inbox, now: Date())
+        pinnedSessionID = surfaces.selectedSessionID()
     }
 
     func synchronizeOutboxSnapshot() async {
@@ -480,6 +505,7 @@ private extension CompanionAppModel {
         sessions = value.sessions
         outbox = value.outbox
         privacy = value.privacy
+        Task { await surfaces.publish(sessions: sessions, inbox: inbox, now: Date()) }
     }
 
     func saveLocalState() {
@@ -497,6 +523,44 @@ private extension CompanionAppModel {
         var bytes = [UInt8](repeating: 0, count: 32)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         return Data(bytes).base64EncodedString()
+    }
+
+    func registerLiveActivityToken(sessionID: UUID, token: Data) async {
+        guard let relay else { return }
+        do {
+            #if DEBUG
+                let environment = "sandbox"
+            #else
+                let environment = "production"
+            #endif
+            try await relay.registerLiveActivityToken(
+                id: UUID(), sessionID: sessionID,
+                token: token.map { String(format: "%02x", $0) }.joined(),
+                environment: environment,
+                expiresAt: Date().addingTimeInterval((8 * 60 * 60) - 300)
+            )
+        } catch {
+            // Local ActivityKit updates remain available; token registration retries on the next state update.
+        }
+    }
+
+    func handleWatchDecision(_ decision: WatchDecisionMessage) async {
+        guard abs(decision.createdAt.timeIntervalSinceNow) <= 60,
+              !outbox.contains(where: {
+                  $0.requestID == decision.requestID && $0.requestVersion == decision.requestVersion
+              })
+        else { return }
+        guard let item = inbox.first(where: {
+            $0.id == decision.requestID && $0.requestVersion == decision.requestVersion
+        }) else { return }
+        let card = WatchRequestCard(item: item)
+        guard WatchDecisionPolicy.disposition(outcome: decision.outcome, card: card, now: Date()) == .allowed else {
+            return
+        }
+        await decide(
+            item: item, outcome: decision.outcome,
+            evidence: .init(surface: .watch, strongAuthentication: false, holdCompleted: false)
+        )
     }
 }
 

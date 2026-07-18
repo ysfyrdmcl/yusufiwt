@@ -24,21 +24,33 @@ settings:
 packages:
   AgentControlKit:
     path: Packages/AgentControlKit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.2
 targets:
   AgentControlMac:
     type: application
     platform: macOS
     sources:
       - Apps/macOS
+      - path: Config/Privacy/PrivacyInfo.xcprivacy
+        buildPhase: resources
     info:
       path: Apps/macOS/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleURLTypes:
           - CFBundleURLName: com.yusuf.agentcontrol.navigation
             CFBundleURLSchemes:
               - agentcontrol
         LSApplicationCategoryType: public.app-category.developer-tools
         NSAppleEventsUsageDescription: AgentControl uses Automation only when you explicitly ask it to reveal an exact pane in a supported terminal.
+        SUEnableAutomaticChecks: false
+        SUFeedURL: $(SPARKLE_FEED_URL)
+        SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)
+        SUVerifyUpdateBeforeExtraction: true
+        AgentControlUpdateChannel: $(SPARKLE_CHANNEL)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(MAC_BUNDLE_IDENTIFIER)
@@ -54,6 +66,8 @@ targets:
         product: AgentCompanion
       - package: AgentControlKit
         product: AgentMacUI
+      - package: Sparkle
+        product: Sparkle
     postBuildScripts:
       - name: Embed LaunchAgent Helper
         script: |
@@ -68,6 +82,15 @@ targets:
           chmod 755 "$helper_destination"
           chmod 755 "$hook_destination"
           chmod 644 "$plist_directory/com.yusuf.agentcontrol.helper.plist"
+          case "$CURRENT_PROJECT_VERSION" in
+            ''|*[!0-9]*) echo 'CURRENT_PROJECT_VERSION must be a positive integer' >&2; exit 1 ;;
+          esac
+          resources_directory="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          manifest="$resources_directory/release-manifest.json"
+          mkdir -p "$resources_directory"
+          helper_sha=$(/usr/bin/shasum -a 256 "$helper_destination" | /usr/bin/cut -d ' ' -f 1)
+          hook_sha=$(/usr/bin/shasum -a 256 "$hook_destination" | /usr/bin/cut -d ' ' -f 1)
+          /usr/bin/printf '{"schemaVersion":1,"marketingVersion":"%s","buildNumber":%s,"localProtocolVersion":1,"helper":{"path":"Contents/MacOS/AgentControlHelper","sha256":"%s"},"hook":{"path":"Contents/MacOS/agentcontrol-hook","sha256":"%s"}}\n' "$MARKETING_VERSION" "$CURRENT_PROJECT_VERSION" "$helper_sha" "$hook_sha" > "$manifest"
         inputFiles:
           - $(BUILT_PRODUCTS_DIR)/AgentControlHelper
           - $(BUILT_PRODUCTS_DIR)/agentcontrol-hook
@@ -76,14 +99,19 @@ targets:
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/AgentControlHelper
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/agentcontrol-hook
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/com.yusuf.agentcontrol.helper.plist
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/release-manifest.json
   AgentControliOS:
     type: application
     platform: iOS
     sources:
       - Apps/iOS
+      - path: Config/Privacy/PrivacyInfo.xcprivacy
+        buildPhase: resources
     info:
       path: Apps/iOS/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleURLTypes:
           - CFBundleURLName: com.yusuf.agentcontrol.companion
             CFBundleURLSchemes:
@@ -93,6 +121,8 @@ targets:
         AgentControlAppGroup: $(APP_GROUP_ID)
         AgentControlKeychainGroup: $(KEYCHAIN_ACCESS_GROUP)
         AgentControlRelayBaseURL: $(RELAY_BASE_URL)
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_IDENTIFIER)
@@ -110,6 +140,9 @@ targets:
           - $(KEYCHAIN_ACCESS_GROUP)
     dependencies:
       - target: NotificationService
+      - target: AgentLiveActivity
+      - target: AgentWidgets
+      - target: AgentControlWatch
       - package: AgentControlKit
         product: AgentDomain
       - package: AgentControlKit
@@ -119,6 +152,8 @@ targets:
     platform: watchOS
     sources:
       - Apps/watchOS
+      - path: Config/Privacy/PrivacyInfo.xcprivacy
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(WATCH_BUNDLE_IDENTIFIER)
@@ -126,11 +161,18 @@ targets:
         SKIP_INSTALL: YES
     entitlements:
       path: Config/Entitlements/AgentControlWatch.entitlements
+    dependencies:
+      - package: AgentControlKit
+        product: AgentDomain
+      - package: AgentControlKit
+        product: AgentCompanion
   NotificationService:
     type: app-extension
     platform: iOS
     sources:
       - Apps/Extensions/NotificationService
+      - path: Config/Privacy/PrivacyInfo.xcprivacy
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(NOTIFICATION_SERVICE_BUNDLE_IDENTIFIER)
@@ -152,6 +194,8 @@ targets:
     platform: iOS
     sources:
       - Apps/Extensions/AgentLiveActivity
+      - path: Config/Privacy/PrivacyInfo.xcprivacy
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(LIVE_ACTIVITY_BUNDLE_IDENTIFIER)
@@ -159,16 +203,32 @@ targets:
         INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
       path: Config/Entitlements/LiveActivity.entitlements
+    dependencies:
+      - package: AgentControlKit
+        product: AgentDomain
+      - package: AgentControlKit
+        product: AgentCompanion
   AgentWidgets:
     type: app-extension
     platform: iOS
     sources:
       - Apps/Extensions/AgentWidgets
+      - path: Config/Privacy/PrivacyInfo.xcprivacy
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(WIDGETS_BUNDLE_IDENTIFIER)
         SKIP_INSTALL: YES
         INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        INFOPLIST_KEY_AgentControlAppGroup: $(APP_GROUP_ID)
+    entitlements:
+      path: Config/Entitlements/AgentWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP_ID)
+    dependencies:
+      - package: AgentControlKit
+        product: AgentCompanion
   AgentControlHelper:
     type: tool
     platform: macOS
@@ -178,6 +238,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(HELPER_BUNDLE_IDENTIFIER)
         PRODUCT_NAME: AgentControlHelper
+        SKIP_INSTALL: YES
     dependencies:
       - package: AgentControlKit
         product: AgentLocalIPC
@@ -191,6 +252,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: agentcontrol-hook
+        SKIP_INSTALL: YES
     dependencies:
       - package: AgentControlKit
         product: AgentHookKit

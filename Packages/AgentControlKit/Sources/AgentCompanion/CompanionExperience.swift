@@ -144,6 +144,7 @@ public enum CompanionAuthorizationError: Error, Equatable, Sendable {
     case strongAuthenticationRequired
     case holdRequired
     case criticalApprovalForbidden
+    case watchApprovalForbidden
     case secretAnswerForbidden
     case answerRequired
 }
@@ -173,6 +174,9 @@ public extension CompanionDecisionPolicy {
         }
         switch item.risk {
         case .low, .medium:
+            if evidence.surface == .watch, item.risk != .low {
+                throw CompanionAuthorizationError.watchApprovalForbidden
+            }
             return
         case .high:
             guard evidence.surface == .applicationDetail else {

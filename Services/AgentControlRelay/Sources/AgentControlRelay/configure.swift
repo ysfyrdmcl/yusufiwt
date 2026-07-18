@@ -12,6 +12,7 @@ public func configure(_ application: Application) async throws {
     application.storage[PushTokenVaultKey.self] = PushTokenVault(secret: config.tokenSecret)
     application.storage[SocketHubKey.self] = RelaySocketHub()
     application.pushProvider = DisabledPushProvider()
+    application.liveActivityPushProvider = DisabledLiveActivityPushProvider()
     let memoryEphemeral = MemoryPresenceProvider()
     application.presenceProvider = memoryEphemeral
     application.transientEnvelopeQueue = memoryEphemeral
@@ -22,6 +23,7 @@ public func configure(_ application: Application) async throws {
     try configureRedis(on: application, values: values, config: config)
 
     application.migrations.add(CreateRelaySchema())
+    application.migrations.add(CreateLiveActivityTokenSchema())
     try await application.autoMigrate()
 
     application.middleware.use(RateLimitMiddleware())
@@ -80,6 +82,15 @@ private func configurePushProvider(on application: Application, values: [String:
         client: application.client, bearerTokens: bearer, topic: topic,
         production: values["APNS_ENVIRONMENT"] == "production"
     )
+    if let liveActivityTopic = values["APNS_LIVE_ACTIVITY_TOPIC"], !liveActivityTopic.isEmpty {
+        guard liveActivityTopic == "\(topic).push-type.liveactivity" else {
+            throw Abort(.internalServerError, reason: "APNS_LIVE_ACTIVITY_TOPIC must match APNS_TOPIC")
+        }
+        application.liveActivityPushProvider = HTTPAPNSLiveActivityProvider(
+            client: application.client, bearerTokens: bearer, topic: liveActivityTopic,
+            production: values["APNS_ENVIRONMENT"] == "production"
+        )
+    }
 }
 
 private func configureWebSocket(on application: Application) {
@@ -113,6 +124,9 @@ struct EnvelopeRetentionLifecycle: LifecycleHandler {
                         group.filter(\.$ackedAt != nil)
                             .filter(\.$expiresAt < Date().addingTimeInterval(TimeInterval(-hours * 3600)))
                     }.delete()
+                try? await LiveActivityTokenModel.query(on: application.db)
+                    .filter(\.$expiresAt < Date())
+                    .delete()
             }
         }
     }

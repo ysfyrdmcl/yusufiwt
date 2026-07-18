@@ -109,6 +109,22 @@ public struct PushTokenRequest: Content {
     public let environment: String
 }
 
+public struct LiveActivityTokenRequest: Content {
+    public let id: UUID
+    public let sessionID: UUID
+    public let token: String
+    public let environment: String
+    public let expiresAt: Date
+}
+
+public struct LiveActivityUpdateRequest: Content {
+    public let recipientDeviceID: UUID
+    public let sessionID: UUID
+    public let state: String
+    public let updatedAt: Date
+    public let staleAt: Date
+}
+
 public struct HealthResponse: Content {
     public let status: String
     public let database: String

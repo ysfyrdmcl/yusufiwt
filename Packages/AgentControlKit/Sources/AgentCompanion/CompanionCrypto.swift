@@ -15,6 +15,7 @@ public enum CompanionCryptoError: Error, Equatable, Sendable {
 }
 
 public struct CompanionIdentity: Sendable {
+    public static let maximumCiphertextBytes = 256 * 1024
     public let deviceID: DeviceID
     public let role: CompanionDeviceRole
     public let keyID: UUID
@@ -121,6 +122,13 @@ public struct CompanionIdentity: Sendable {
         }
         guard envelope.recipientDeviceID == deviceID else { throw CompanionCryptoError.wrongRecipient }
         guard envelope.expiresAt > now else { throw CompanionCryptoError.expired }
+        guard envelope.signature.count == 64,
+              senderSigningPublicKey.count == 32
+        else { throw CompanionCryptoError.invalidSignature }
+        guard senderAgreementPublicKey.count == 32,
+              envelope.ciphertext.count >= 28,
+              envelope.ciphertext.count <= Self.maximumCiphertextBytes
+        else { throw CompanionCryptoError.invalidCiphertext }
         let signingPublicKey = try Curve25519.Signing.PublicKey(rawRepresentation: senderSigningPublicKey)
         guard signingPublicKey.isValidSignature(envelope.signature, for: envelope.signingBytes) else {
             throw CompanionCryptoError.invalidSignature
@@ -260,6 +268,9 @@ public enum PairingQRCode {
 }
 
 public enum PairingQRCodeCodec {
+    public static let maximumURLBytes = 8 * 1024
+    public static let maximumPayloadBytes = 4 * 1024
+
     public static func encode(_ payload: PairingQRCodePayload) throws -> URL {
         let data = try CompanionCoding.makeEncoder().encode(payload)
         let encoded = data.base64EncodedString()
@@ -275,6 +286,9 @@ public enum PairingQRCodeCodec {
     }
 
     public static func decode(_ value: String, now: Date) throws -> PairingQRCodePayload {
+        guard value.utf8.count <= maximumURLBytes else {
+            throw CompanionCryptoError.invalidPairingPayload
+        }
         guard let components = URLComponents(string: value),
               components.scheme?.lowercased() == "agentcontrol",
               components.host?.lowercased() == "pair",
@@ -282,8 +296,9 @@ public enum PairingQRCodeCodec {
         else { throw CompanionCryptoError.invalidPairingPayload }
         encoded = encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         encoded.append(String(repeating: "=", count: (4 - encoded.count % 4) % 4))
-        guard let data = Data(base64Encoded: encoded) else { throw CompanionCryptoError.invalidPairingPayload }
-        let payload = try CompanionCoding.makeDecoder().decode(PairingQRCodePayload.self, from: data)
+        guard let data = Data(base64Encoded: encoded), data.count <= maximumPayloadBytes,
+              let payload = try? CompanionCoding.makeDecoder().decode(PairingQRCodePayload.self, from: data)
+        else { throw CompanionCryptoError.invalidPairingPayload }
         try PairingQRCode.validate(payload, now: now)
         return payload
     }

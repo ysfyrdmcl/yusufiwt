@@ -62,6 +62,18 @@ struct CompanionRootView: View {
                 NavigationStack { InboxDetailView(model: model, item: item) }
             }
         }
+        .sheet(isPresented: Binding(
+            get: { model.selectedSessionID != nil && model.paired },
+            set: {
+                if !$0 {
+                    model.selectedSessionID = nil
+                }
+            }
+        )) {
+            if let session = model.sessions.first(where: { $0.id == model.selectedSessionID }) {
+                NavigationStack { SessionDetailView(model: model, session: session) }
+            }
+        }
         .onChange(of: model.selectedInboxID) { _, value in
             if value != nil {
                 tab = .inbox
@@ -242,7 +254,7 @@ private struct ActiveSessionsView: View {
                 } else {
                     List(model.sessions) { session in
                         NavigationLink {
-                            SessionDetailView(session: session)
+                            SessionDetailView(model: model, session: session)
                         } label: {
                             SessionRow(session: session)
                         }
@@ -284,6 +296,7 @@ private struct SessionRow: View {
 }
 
 private struct SessionDetailView: View {
+    @ObservedObject var model: CompanionAppModel
     let session: CompanionSessionSummary
 
     var body: some View {
@@ -297,6 +310,22 @@ private struct SessionDetailView: View {
             Section(String(localized: "session.timeline")) {
                 LabeledContent(String(localized: "session.started"), value: session.startedAt.formatted())
                 LabeledContent(String(localized: "session.updated"), value: session.updatedAt.formatted())
+            }
+            if !session.state.isTerminal {
+                Section {
+                    Button {
+                        Task { await model.toggleLiveActivity(for: session) }
+                    } label: {
+                        Label(
+                            model.pinnedSessionID == session.id
+                                ? String(localized: "liveActivity.unpin")
+                                : String(localized: "liveActivity.pin"),
+                            systemImage: model.pinnedSessionID == session.id ? "pin.slash" : "pin"
+                        )
+                    }
+                } footer: {
+                    Text(String(localized: "liveActivity.help"))
+                }
             }
         }
         .navigationTitle(session.projectName)

@@ -9,6 +9,8 @@ struct EnvelopeController: RouteCollection {
         routes.post("envelopes", ":id", "ack", use: acknowledge)
         routes.post("push", "tokens", use: registerPushToken)
         routes.delete("push", "tokens", ":id", use: deletePushToken)
+        routes.post("live-activities", "tokens", use: registerLiveActivityToken)
+        routes.post("live-activities", "update", use: updateLiveActivity)
     }
 
     private func submit(request: Request) async throws -> EnvelopeAcceptedResponse {
@@ -98,6 +100,76 @@ struct EnvelopeController: RouteCollection {
         else { throw Abort(.notFound) }
         try await model.delete(on: request.db)
         return .noContent
+    }
+
+    private func registerLiveActivityToken(request: Request) async throws -> HTTPStatus {
+        let auth = try request.auth.require(AuthenticatedDevice.self)
+        guard auth.role == .iPhone else { throw Abort(.forbidden) }
+        let input = try request.content.decode(LiveActivityTokenRequest.self)
+        let now = Date()
+        guard input.token.count <= 512,
+              ["sandbox", "production"].contains(input.environment),
+              input.expiresAt > now,
+              input.expiresAt <= now.addingTimeInterval(8 * 60 * 60)
+        else { throw Abort(.badRequest) }
+        let hash = SecretHash.make(input.token, pepper: request.application.relayConfiguration.tokenHashPepper)
+        let model = try await LiveActivityTokenModel.query(on: request.db)
+            .filter(\.$deviceID == auth.deviceID)
+            .filter(\.$sessionID == input.sessionID)
+            .first()
+            ?? LiveActivityTokenModel(
+                id: input.id, deviceID: auth.deviceID, sessionID: input.sessionID,
+                tokenHash: hash,
+                tokenCiphertext: request.application.pushTokenVault.seal(input.token),
+                environment: input.environment, expiresAt: input.expiresAt
+            )
+        guard model.deviceID == auth.deviceID else { throw Abort(.forbidden) }
+        model.tokenHash = hash
+        model.tokenCiphertext = try request.application.pushTokenVault.seal(input.token)
+        model.environment = input.environment
+        model.expiresAt = input.expiresAt
+        try await model.save(on: request.db)
+        return .accepted
+    }
+
+    private func updateLiveActivity(request: Request) async throws -> HTTPStatus {
+        let auth = try request.auth.require(AuthenticatedDevice.self)
+        guard auth.role == .localMac else { throw Abort(.forbidden) }
+        let input = try request.content.decode(LiveActivityUpdateRequest.self)
+        let allowedStates: Set = [
+            "discovered", "starting", "thinking", "running", "executing",
+            "waitingApproval", "waitingInput", "paused", "completed", "failed",
+            "cancelled", "disconnected", "stale"
+        ]
+        let now = Date()
+        guard allowedStates.contains(input.state),
+              abs(input.updatedAt.timeIntervalSince(now)) <= 5 * 60,
+              input.staleAt > input.updatedAt,
+              input.staleAt <= input.updatedAt.addingTimeInterval(30 * 60),
+              let recipient = try await DeviceModel.find(input.recipientDeviceID, on: request.db),
+              recipient.userID == auth.userID,
+              recipient.role == ServerDeviceRole.iPhone.rawValue,
+              recipient.revokedAt == nil
+        else { throw Abort(.badRequest) }
+        guard let model = try await LiveActivityTokenModel.query(on: request.db)
+            .filter(\.$deviceID == input.recipientDeviceID)
+            .filter(\.$sessionID == input.sessionID)
+            .filter(\.$expiresAt > now)
+            .first()
+        else { throw Abort(.notFound) }
+        let token = try request.application.pushTokenVault.open(model.tokenCiphertext)
+        let result = await request.application.liveActivityPushProvider.sendLiveActivityUpdate(input, to: token)
+        switch result {
+        case .accepted:
+            return .accepted
+        case .invalidToken:
+            try await model.delete(on: request.db)
+            throw Abort(.gone)
+        case .retryable:
+            throw Abort(.serviceUnavailable)
+        case let .permanentFailure(reason):
+            throw Abort(.badGateway, reason: reason)
+        }
     }
 
     private func directionAllowed(role: ServerDeviceRole, kind: ServerEnvelopeKind) -> Bool {

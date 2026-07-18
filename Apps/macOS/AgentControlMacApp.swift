@@ -1,6 +1,7 @@
 import AgentLocalIPC
 import AgentMacUI
 import AppKit
+import Sparkle
 import SwiftUI
 
 @main
@@ -15,6 +16,8 @@ struct AgentControlMacApp: App {
         .defaultSize(width: 1060, height: 700)
         .commands {
             CommandGroup(after: .appInfo) {
+                Button("menu.checkForUpdates") { appDelegate.checkForUpdates() }
+                    .disabled(!appDelegate.canCheckForUpdates)
                 Button("menu.togglePanel") { appDelegate.togglePanel() }
                     .keyboardShortcut(.space, modifiers: [.control, .option])
             }
@@ -39,6 +42,7 @@ struct AgentControlMacApp: App {
 @MainActor
 final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
     let notificationCoordinator = MacNotificationCoordinator()
+    private let updateController = SparkleUpdateController()
     lazy var store = AgentControlStore(notificationCoordinator: notificationCoordinator)
     lazy var phase10 = Phase10Coordinator(notificationCoordinator: notificationCoordinator)
     private var panelCoordinator: FloatingPanelCoordinator?
@@ -82,6 +86,14 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
 
     func togglePanel() {
         panelCoordinator?.toggle()
+    }
+
+    var canCheckForUpdates: Bool {
+        updateController.isConfigured
+    }
+
+    func checkForUpdates() {
+        updateController.checkForUpdates()
     }
 
     func updateHotKey(_ value: GlobalHotKeySetting) {

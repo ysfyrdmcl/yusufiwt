@@ -17,15 +17,27 @@ build_target() {
   echo "xcode target: $target_name ok"
 }
 
+build_scheme() {
+  scheme_name=$1
+  destination_name=$2
+  if ! xcodebuild -project AgentControl.xcodeproj -scheme "$scheme_name" -configuration Debug \
+    -destination "$destination_name" -derivedDataPath "$repo_root/.build/XcodeDerivedData-$scheme_name" \
+    CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build >"$build_log" 2>&1; then
+    cat "$build_log" >&2
+    return 1
+  fi
+  echo "xcode scheme: $scheme_name ok"
+}
+
 build_target AgentControlMac macosx
 build_target AgentControlHelper macosx
 build_target AgentControlHook macosx
 build_target FakeAgentSimulator macosx
 build_target ProtocolInspector macosx
-build_target AgentControliOS iphonesimulator
+build_scheme AgentControliOS 'generic/platform=iOS Simulator'
 build_target NotificationService iphonesimulator
 build_target AgentLiveActivity iphonesimulator
 build_target AgentWidgets iphonesimulator
-build_target AgentControlWatch watchsimulator
+build_scheme AgentControlWatch 'generic/platform=watchOS Simulator'
 
 echo 'xcode shell targets: ok'

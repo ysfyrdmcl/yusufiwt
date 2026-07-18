@@ -16,6 +16,8 @@
         case unsafeSymbolicLink
         case ownerMismatch
         case readOnly
+        case unsafeFileType
+        case invalidManagedEntry
         case managedEntryConflict(String)
 
         public var description: String {
@@ -26,6 +28,8 @@
             case .unsafeSymbolicLink: "Refusing to modify a symbolic-link configuration path."
             case .ownerMismatch: "Refusing to modify a configuration owned by another user."
             case .readOnly: "The configuration is not writable."
+            case .unsafeFileType: "The integration configuration must be a regular file."
+            case .invalidManagedEntry: "The managed hook contains an unsafe or invalid value."
             case let .managedEntryConflict(marker): "The managed entry \(marker) conflicts with user changes."
             }
         }
@@ -99,6 +103,7 @@
             format: ManagedConfigFormat,
             hooks: [HookCommandDefinition]
         ) throws -> ManagedConfigPreview {
+            try hooks.forEach(validateHook)
             let original = content.isEmpty ? emptyDocument(for: format) : content
             var updated = original
             switch format {
@@ -121,6 +126,7 @@
             format: ManagedConfigFormat,
             hooks: [HookCommandDefinition]
         ) throws -> ManagedConfigPreview {
+            try hooks.forEach(validateHook)
             guard !content.isEmpty else { return ManagedConfigPreview(original: "", updated: "") }
             var updated = content
             switch format {
@@ -158,17 +164,36 @@
         }
 
         private func appendTOML(_ hook: HookCommandDefinition, to content: String) -> String {
-            let escapedCommand = hook.command.replacingOccurrences(of: "'", with: "''")
             var block = "# agentcontrol:begin \(hook.marker)\n[[hooks.\(hook.event)]]\n"
             if let matcher = hook.matcher {
-                block += "matcher = '\(matcher.replacingOccurrences(of: "'", with: "''"))'\n"
+                block += "matcher = \(tomlString(matcher))\n"
             }
             block += "[[hooks.\(hook.event).hooks]]\n"
-            block += "type = \"command\"\ncommand = '\(escapedCommand)'\n"
+            block += "type = \"command\"\ncommand = \(tomlString(hook.command))\n"
             block += "timeout = \(hook.timeoutSeconds)\nstatusMessage = \"AgentControl [\(hook.marker)]\"\n"
             block += "# agentcontrol:end \(hook.marker)\n"
             let separator = content.isEmpty || content.hasSuffix("\n") ? "" : "\n"
             return content + separator + block
+        }
+
+        private func tomlString(_ value: String) -> String {
+            let data = try? JSONEncoder().encode(value)
+            return data.flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
+        }
+
+        private func validateHook(_ hook: HookCommandDefinition) throws {
+            let safeIdentifier = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+            guard !hook.event.isEmpty,
+                  hook.event.unicodeScalars.allSatisfy(safeIdentifier.contains),
+                  !hook.marker.isEmpty,
+                  hook.marker.unicodeScalars.allSatisfy(safeIdentifier.contains),
+                  (1 ... 120_000).contains(hook.timeoutSeconds),
+                  !hook.command.isEmpty,
+                  hook.command.utf8.count <= 4096,
+                  !hook.command.contains("\0"),
+                  (hook.matcher?.utf8.count ?? 0) <= 512,
+                  hook.matcher?.contains("\0") != true
+            else { throw ManagedConfigError.invalidManagedEntry }
         }
 
         private func removeTOML(marker: String, from content: String) -> String {
@@ -339,6 +364,9 @@
             let handle = try FileHandle(forWritingTo: temporary)
             try handle.synchronize()
             try handle.close()
+            // Close the preview/write race before the atomic replacement. A path
+            // swapped to a symlink after preview must still fail closed.
+            try validatePath(url, requireWritable: true)
             if fileManager.fileExists(atPath: url.path) {
                 _ = try fileManager.replaceItemAt(url, withItemAt: temporary)
             } else {
@@ -368,13 +396,36 @@
         }
 
         private func validatePath(_ url: URL, requireWritable: Bool) throws {
-            guard fileManager.fileExists(atPath: url.path) else { return }
+            let standardized = url.standardizedFileURL
+            try validateExistingComponents(of: standardized)
+            guard fileManager.fileExists(atPath: standardized.path) else { return }
             var info = stat()
-            guard lstat(url.path, &info) == 0 else { throw ManagedConfigError.readOnly }
+            guard lstat(standardized.path, &info) == 0 else { throw ManagedConfigError.readOnly }
             guard (info.st_mode & S_IFMT) != S_IFLNK else { throw ManagedConfigError.unsafeSymbolicLink }
+            guard (info.st_mode & S_IFMT) == S_IFREG else { throw ManagedConfigError.unsafeFileType }
             guard info.st_uid == getuid() else { throw ManagedConfigError.ownerMismatch }
-            if requireWritable, !fileManager.isWritableFile(atPath: url.path) {
+            if requireWritable, !fileManager.isWritableFile(atPath: standardized.path) {
                 throw ManagedConfigError.readOnly
+            }
+        }
+
+        private func validateExistingComponents(of url: URL) throws {
+            var component = URL(fileURLWithPath: "/", isDirectory: true)
+            for name in url.pathComponents.dropFirst() {
+                component.appendPathComponent(name)
+                var componentInfo = stat()
+                if lstat(component.path, &componentInfo) != 0 {
+                    guard errno == ENOENT else { throw ManagedConfigError.readOnly }
+                    break
+                }
+                if (componentInfo.st_mode & S_IFMT) == S_IFLNK {
+                    // macOS exposes trusted temporary paths through root-owned
+                    // compatibility links such as /var. Reject every
+                    // user-controlled link in the configuration path.
+                    guard componentInfo.st_uid == 0 else {
+                        throw ManagedConfigError.unsafeSymbolicLink
+                    }
+                }
             }
         }
 

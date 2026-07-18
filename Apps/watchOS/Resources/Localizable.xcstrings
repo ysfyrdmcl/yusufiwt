@@ -1,0 +1,19 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Approve" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Approve" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Onayla" } } } },
+    "Continue on iPhone" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Continue on iPhone" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "iPhone’da devam edin" } } } },
+    "Deny" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Deny" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Reddet" } } } },
+    "iPhone connection unavailable" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "iPhone connection unavailable" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "iPhone bağlantısı kullanılamıyor" } } } },
+    "Needs attention" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Needs attention" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "İlgi bekliyor" } } } },
+    "No active sessions" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No active sessions" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Aktif oturum yok" } } } },
+    "Open AgentControl on iPhone" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Open AgentControl on iPhone" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "iPhone’da AgentControl’ü açın" } } } },
+    "Open iPhone to continue" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Open iPhone to continue" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Devam etmek için iPhone’u açın" } } } },
+    "Project" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Project" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Proje" } } } },
+    "Review on iPhone" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Review on iPhone" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "iPhone’da incele" } } } },
+    "Risk" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Risk" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Risk" } } } },
+    "Sent to iPhone" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Sent to iPhone" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "iPhone’a gönderildi" } } } },
+    "Sessions" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Sessions" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Oturumlar" } } } }
+  },
+  "version" : "1.0"
+}

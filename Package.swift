@@ -64,7 +64,7 @@ let package = Package(
         ),
         .target(
             name: "AgentMacUI",
-            dependencies: ["AgentDomain", "AgentPersistence", "AgentLocalIPC"],
+            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence", "AgentLocalIPC", "AgentHookKit"],
             path: "Packages/AgentControlKit/Sources/AgentMacUI"
         ),
         .executableTarget(

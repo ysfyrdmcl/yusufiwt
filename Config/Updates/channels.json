@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "channels": {
+    "stable": {
+      "appcastURL": "https://updates.agentcontrol.app/stable/appcast.xml",
+      "downloadURLPrefix": "https://updates.agentcontrol.app/stable/"
+    },
+    "beta": {
+      "appcastURL": "https://updates.agentcontrol.app/beta/appcast.xml",
+      "downloadURLPrefix": "https://updates.agentcontrol.app/beta/"
+    }
+  }
+}
