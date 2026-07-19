@@ -16,7 +16,7 @@ do {
 }
 
 private var allowsAdHocSignatures: Bool {
-    #if DEBUG
+    #if DEBUG || AGENTCONTROL_MAC_LOCAL
         true
     #else
         false

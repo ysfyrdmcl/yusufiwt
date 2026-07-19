@@ -1,4 +1,4 @@
-# AgentControl release runbook
+# yusufiwt release runbook
 
 ## One-time protected environment setup
 
@@ -56,4 +56,3 @@ dSYMs before export/upload.
 
 If any check fails, do not mutate an existing published appcast. Fix the issue,
 increment the build number, produce new artifacts, and repeat all gates.
-

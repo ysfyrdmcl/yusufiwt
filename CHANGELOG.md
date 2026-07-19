@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the Mac Local V1 scope, isolated macOS build graph, offline defaults and local packaging gate; preserve companion/relay distribution work for V2.
+
 - Add Phase 0 repository bootstrap, contracts, accepted architecture decisions, native shell targets, and CI foundation.
 - Add Phase 1 strong domain models, versioned event envelopes, deterministic state machines, typed errors, and risk classification.
 - Add Phase 5 managed Codex app-server integration with schema compatibility, session control, approval correlation, provider acknowledgment, reconnect, and redacted diagnostics.

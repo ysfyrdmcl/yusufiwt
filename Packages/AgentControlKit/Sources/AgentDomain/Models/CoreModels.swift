@@ -178,11 +178,13 @@ public enum QuestionStatus: String, Codable, Sendable { case pending, answered, 
 public struct QuestionChoice: Codable, Hashable, Sendable, Identifiable {
     public let id: String
     public let label: String
+    public let description: String?
 
-    public init(id: String, label: String) {
+    public init(id: String, label: String, description: String? = nil) {
         precondition(!id.isEmpty, "Question choice IDs must not be empty")
         self.id = id
         self.label = label
+        self.description = description
     }
 
     public init(from decoder: any Decoder) throws {
@@ -190,6 +192,7 @@ public struct QuestionChoice: Codable, Hashable, Sendable, Identifiable {
         if let label = try? container.decode(String.self) {
             id = "legacy-" + label.utf8.map { String(format: "%02x", $0) }.joined()
             self.label = label
+            description = nil
             return
         }
         let value = try container.decode(StructuredChoice.self)
@@ -198,11 +201,12 @@ public struct QuestionChoice: Codable, Hashable, Sendable, Identifiable {
         }
         id = value.id
         label = value.label
+        description = value.description
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
-        try container.encode(StructuredChoice(id: id, label: label))
+        try container.encode(StructuredChoice(id: id, label: label, description: description))
     }
 
     public static func legacy(label: String) -> QuestionChoice {
@@ -215,6 +219,7 @@ public struct QuestionChoice: Codable, Hashable, Sendable, Identifiable {
     private struct StructuredChoice: Codable {
         let id: String
         let label: String
+        let description: String?
     }
 }
 
@@ -222,8 +227,10 @@ public struct AgentQuestion: Codable, Sendable, Identifiable, Equatable {
     public let id: QuestionID
     public let sessionID: SessionID
     public let kind: QuestionKind
+    public let header: String?
     public let prompt: String
     public let choices: [QuestionChoice]
+    public let isOther: Bool
     public let maximumAnswerLength: Int?
     public var status: QuestionStatus
 
@@ -231,16 +238,20 @@ public struct AgentQuestion: Codable, Sendable, Identifiable, Equatable {
         id: QuestionID,
         sessionID: SessionID,
         kind: QuestionKind,
+        header: String? = nil,
         prompt: String,
         choices: [QuestionChoice] = [],
+        isOther: Bool = false,
         maximumAnswerLength: Int? = nil,
         status: QuestionStatus = .pending
     ) {
         self.id = id
         self.sessionID = sessionID
         self.kind = kind
+        self.header = header
         self.prompt = prompt
         self.choices = choices
+        self.isOther = isOther
         self.maximumAnswerLength = maximumAnswerLength
         self.status = status
     }
@@ -263,6 +274,36 @@ public struct AgentQuestion: Codable, Sendable, Identifiable, Equatable {
             maximumAnswerLength: maximumAnswerLength,
             status: status
         )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, sessionID, kind, header, prompt, choices, isOther, maximumAnswerLength, status
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(QuestionID.self, forKey: .id)
+        sessionID = try container.decode(SessionID.self, forKey: .sessionID)
+        kind = try container.decode(QuestionKind.self, forKey: .kind)
+        header = try container.decodeIfPresent(String.self, forKey: .header)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        choices = try container.decodeIfPresent([QuestionChoice].self, forKey: .choices) ?? []
+        isOther = try container.decodeIfPresent(Bool.self, forKey: .isOther) ?? false
+        maximumAnswerLength = try container.decodeIfPresent(Int.self, forKey: .maximumAnswerLength)
+        status = try container.decodeIfPresent(QuestionStatus.self, forKey: .status) ?? .pending
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(sessionID, forKey: .sessionID)
+        try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(header, forKey: .header)
+        try container.encode(prompt, forKey: .prompt)
+        try container.encode(choices, forKey: .choices)
+        try container.encode(isOther, forKey: .isOther)
+        try container.encodeIfPresent(maximumAnswerLength, forKey: .maximumAnswerLength)
+        try container.encode(status, forKey: .status)
     }
 
     public init(

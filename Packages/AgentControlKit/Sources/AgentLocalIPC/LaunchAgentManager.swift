@@ -70,6 +70,17 @@
             return service.state
         }
 
+        /// Refreshes the ServiceManagement registration after an in-place app upgrade.
+        /// Pending hook spool files are deliberately preserved.
+        public func repairRegistration() async throws -> LaunchAgentState {
+            if service.state != .notRegistered, service.state != .notFound {
+                try await service.unregister()
+            }
+            try removeOwnedSocketIfPresent()
+            try service.register()
+            return service.state
+        }
+
         private func removeOwnedSocketIfPresent() throws {
             var info = stat()
             guard lstat(paths.socketURL.path, &info) == 0 else { return }

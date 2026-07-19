@@ -1,7 +1,7 @@
 {
   "name": "agentcontrol-navigation",
-  "displayName": "AgentControl Navigation",
-  "description": "Reveals the exact VS Code or Cursor terminal associated with an AgentControl session.",
+  "displayName": "yusufiwt Navigation",
+  "description": "Reveals the exact VS Code or Cursor terminal associated with a yusufiwt session.",
   "version": "1.0.0",
   "publisher": "yusuf",
   "license": "SEE LICENSE IN LICENSE",
@@ -21,8 +21,8 @@
   "files": ["dist", "README.md", "LICENSE"],
   "contributes": {
     "commands": [
-      { "command": "agentcontrol.captureTerminalContext", "title": "AgentControl: Capture Active Terminal" },
-      { "command": "agentcontrol.registerTerminal", "title": "AgentControl: Register Active Terminal" }
+      { "command": "agentcontrol.captureTerminalContext", "title": "yusufiwt: Capture Active Terminal" },
+      { "command": "agentcontrol.registerTerminal", "title": "yusufiwt: Register Active Terminal" }
     ]
   },
   "scripts": {

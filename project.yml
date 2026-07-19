@@ -1,4 +1,4 @@
-name: AgentControl
+name: yusufiwt
 options:
   bundleIdPrefix: com.yusuf.agentcontrol
   deploymentTarget:
@@ -8,10 +8,12 @@ options:
   createIntermediateGroups: true
 configs:
   Debug: debug
+  MacLocalRelease: release
   Staging: release
   Release: release
 configFiles:
   Debug: Config/Debug.xcconfig
+  MacLocalRelease: Config/MacLocalRelease.xcconfig
   Staging: Config/Staging.xcconfig
   Release: Config/Release.xcconfig
 settings:
@@ -28,24 +30,99 @@ packages:
     url: https://github.com/sparkle-project/Sparkle
     exactVersion: 2.9.2
 targets:
-  AgentControlMac:
+  AgentControlMacLocal:
     type: application
     platform: macOS
     sources:
-      - Apps/macOS
+      - path: Apps/macOS
+        excludes:
+          - SparkleUpdateController.swift
+          - Info.plist
+      - path: Apps/Shared
       - path: Config/Privacy/PrivacyInfo.xcprivacy
         buildPhase: resources
     info:
-      path: Apps/macOS/Info.plist
+      path: Apps/macOS/Info-MacLocal.plist
       properties:
+        CFBundleDisplayName: yusufiwt
+        CFBundleName: yusufiwt
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleURLTypes:
           - CFBundleURLName: com.yusuf.agentcontrol.navigation
             CFBundleURLSchemes:
               - agentcontrol
+              - yusufiwt
         LSApplicationCategoryType: public.app-category.developer-tools
-        NSAppleEventsUsageDescription: AgentControl uses Automation only when you explicitly ask it to reveal an exact pane in a supported terminal.
+        NSAppleEventsUsageDescription: yusufiwt uses Automation only when you explicitly ask it to reveal an exact pane in a supported terminal.
+        AgentControlReleaseScope: mac-local-v1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(MAC_BUNDLE_IDENTIFIER)
+        PRODUCT_NAME: yusufiwt
+    entitlements:
+      path: Config/Entitlements/AgentControlMac.entitlements
+    dependencies:
+      - target: AgentControlHelper
+        embed: false
+      - target: AgentControlHook
+        embed: false
+      - package: AgentControlKit
+        product: AgentLocalIPC
+      - package: AgentControlKit
+        product: AgentMacUI
+    postBuildScripts:
+      - name: Embed Mac Local Helper and Hook
+        script: |
+          set -eu
+          helper_destination="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/MacOS/AgentControlHelper"
+          hook_destination="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/MacOS/agentcontrol-hook"
+          plist_directory="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
+          mkdir -p "$plist_directory"
+          cp "$BUILT_PRODUCTS_DIR/AgentControlHelper" "$helper_destination"
+          cp "$BUILT_PRODUCTS_DIR/agentcontrol-hook" "$hook_destination"
+          cp "$SRCROOT/Config/LaunchAgents/com.yusuf.agentcontrol.helper.plist" "$plist_directory/com.yusuf.agentcontrol.helper.plist"
+          chmod 755 "$helper_destination" "$hook_destination"
+          chmod 644 "$plist_directory/com.yusuf.agentcontrol.helper.plist"
+          resources_directory="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          manifest="$resources_directory/release-manifest.json"
+          mkdir -p "$resources_directory"
+          helper_sha=$(/usr/bin/shasum -a 256 "$helper_destination" | /usr/bin/cut -d ' ' -f 1)
+          hook_sha=$(/usr/bin/shasum -a 256 "$hook_destination" | /usr/bin/cut -d ' ' -f 1)
+          /usr/bin/printf '{"schemaVersion":1,"releaseScope":"mac-local-v1","marketingVersion":"%s","buildNumber":%s,"localProtocolVersion":1,"helper":{"path":"Contents/MacOS/AgentControlHelper","sha256":"%s"},"hook":{"path":"Contents/MacOS/agentcontrol-hook","sha256":"%s"}}\n' "$MARKETING_VERSION" "$CURRENT_PROJECT_VERSION" "$helper_sha" "$hook_sha" > "$manifest"
+        inputFiles:
+          - $(BUILT_PRODUCTS_DIR)/AgentControlHelper
+          - $(BUILT_PRODUCTS_DIR)/agentcontrol-hook
+          - $(SRCROOT)/Config/LaunchAgents/com.yusuf.agentcontrol.helper.plist
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/AgentControlHelper
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/agentcontrol-hook
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/com.yusuf.agentcontrol.helper.plist
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/release-manifest.json
+  AgentControlMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: Apps/macOS
+        excludes:
+          - Info-MacLocal.plist
+      - path: Apps/Shared
+      - path: Config/Privacy/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    info:
+      path: Apps/macOS/Info.plist
+      properties:
+        CFBundleDisplayName: yusufiwt
+        CFBundleName: yusufiwt
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.yusuf.agentcontrol.navigation
+            CFBundleURLSchemes:
+              - agentcontrol
+              - yusufiwt
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSAppleEventsUsageDescription: yusufiwt uses Automation only when you explicitly ask it to reveal an exact pane in a supported terminal.
         SUEnableAutomaticChecks: false
         SUFeedURL: $(SPARKLE_FEED_URL)
         SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)
@@ -54,7 +131,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(MAC_BUNDLE_IDENTIFIER)
-        PRODUCT_NAME: AgentControl
+        PRODUCT_NAME: yusufiwt
     entitlements:
       path: Config/Entitlements/AgentControlMac.entitlements
     dependencies:
@@ -105,18 +182,22 @@ targets:
     platform: iOS
     sources:
       - Apps/iOS
+      - Apps/Shared
       - path: Config/Privacy/PrivacyInfo.xcprivacy
         buildPhase: resources
     info:
       path: Apps/iOS/Info.plist
       properties:
+        CFBundleDisplayName: yusufiwt
+        CFBundleName: yusufiwt
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleURLTypes:
           - CFBundleURLName: com.yusuf.agentcontrol.companion
             CFBundleURLSchemes:
               - agentcontrol
-        NSCameraUsageDescription: Scan the pairing QR code shown by AgentControl on your Mac.
+              - yusufiwt
+        NSCameraUsageDescription: Scan the pairing QR code shown by yusufiwt on your Mac.
         NSFaceIDUsageDescription: Confirm high-risk agent decisions before sending them to your Mac.
         AgentControlAppGroup: $(APP_GROUP_ID)
         AgentControlKeychainGroup: $(KEYCHAIN_ACCESS_GROUP)
@@ -126,7 +207,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_IDENTIFIER)
-        PRODUCT_NAME: AgentControl
+        PRODUCT_NAME: yusufiwt
         TARGETED_DEVICE_FAMILY: "1,2"
     entitlements:
       path: Config/Entitlements/AgentControliOS.entitlements
@@ -152,12 +233,15 @@ targets:
     platform: watchOS
     sources:
       - Apps/watchOS
+      - Apps/Shared
       - path: Config/Privacy/PrivacyInfo.xcprivacy
         buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(WATCH_BUNDLE_IDENTIFIER)
-        PRODUCT_NAME: AgentControl
+        PRODUCT_NAME: yusufiwtWatch
+        INFOPLIST_KEY_CFBundleDisplayName: yusufiwt
+        INFOPLIST_KEY_CFBundleName: yusufiwt
         SKIP_INSTALL: YES
     entitlements:
       path: Config/Entitlements/AgentControlWatch.entitlements
@@ -213,6 +297,7 @@ targets:
     platform: iOS
     sources:
       - Apps/Extensions/AgentWidgets
+      - Apps/Shared
       - path: Config/Privacy/PrivacyInfo.xcprivacy
         buildPhase: resources
     settings:
@@ -287,6 +372,14 @@ targets:
       - package: AgentControlKit
         product: AgentLocalIPC
 schemes:
+  AgentControlMacLocal:
+    build:
+      targets:
+        AgentControlMacLocal: all
+    run:
+      config: MacLocalRelease
+    archive:
+      config: MacLocalRelease
   AgentControlMac:
     build:
       targets:

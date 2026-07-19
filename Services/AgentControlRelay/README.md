@@ -1,4 +1,4 @@
-# AgentControl Relay
+# yusufiwt Relay
 
 Vapor relay for the optional Personal/Self-Hosted Companion modes. It accepts only authenticated routing metadata, public device keys, short-lived pairing material and encrypted envelopes. It never receives agent prompts, commands, paths or content keys.
 

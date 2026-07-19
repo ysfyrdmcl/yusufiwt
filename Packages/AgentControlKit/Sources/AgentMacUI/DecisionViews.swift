@@ -27,6 +27,11 @@
                             RiskBadge(risk: risk.level)
                         }
                     }
+                    if let header = decision.question?.header, !header.isEmpty {
+                        Text(header)
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
                     Text(presentation.title).font(.body).textSelection(.enabled)
                     if !presentation.detailLines.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -97,17 +102,35 @@
         private var questionControls: some View {
             switch decision.question?.kind {
             case .singleChoice:
-                HStack {
+                VStack(alignment: .leading, spacing: AgentControlSpacing.compact) {
                     ForEach(decision.choices, id: \.self) { choice in
-                        Button(choice.label) { Task { _ = await store.resolve(decision, as: .answerChoice(id: choice.id)) } }
+                        Button {
+                            Task { _ = await store.resolve(decision, as: .answerChoice(id: choice.id)) }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(choice.label).fontWeight(.semibold)
+                                if let description = choice.description, !description.isEmpty {
+                                    Text(description)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    Spacer()
-                    Button("action.openTerminal") { store.openTerminal(for: decision) }
+                    if decision.question?.isOther == true {
+                        otherAnswerControls
+                    }
+                    HStack {
+                        Spacer()
+                        Button("action.openTerminal") { store.openTerminal(for: decision) }
+                    }
                 }
             case .multiChoice:
                 VStack(alignment: .leading) {
                     ForEach(decision.choices) { choice in
-                        Toggle(choice.label, isOn: Binding(
+                        Toggle(isOn: Binding(
                             get: { selectedChoiceIDs.contains(choice.id) },
                             set: { selected in
                                 if selected {
@@ -116,7 +139,14 @@
                                     selectedChoiceIDs.remove(choice.id)
                                 }
                             }
-                        ))
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(choice.label)
+                                if let description = choice.description, !description.isEmpty {
+                                    Text(description).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
                     Button("action.sendAnswer") {
                         Task { _ = await store.resolve(decision, as: .answerChoices(ids: selectedChoiceIDs.sorted())) }
@@ -145,6 +175,16 @@
                 }
             case .secret:
                 EmptyView()
+            }
+        }
+
+        private var otherAnswerControls: some View {
+            HStack {
+                TextField("decision.answerPlaceholder", text: $answer)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { submitAnswer() }
+                Button("action.sendAnswer") { submitAnswer() }
+                    .disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
 

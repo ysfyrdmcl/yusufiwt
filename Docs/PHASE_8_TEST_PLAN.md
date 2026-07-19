@@ -38,7 +38,7 @@ and the documented acknowledgment boundary.
 7. Resolve a request and confirm the UI says it was sent to the provider, not
    applied, until a provider acknowledgment event is received.
 
-AgentControl uses only public UserNotifications category and interruption APIs.
+yusufiwt uses only public UserNotifications category and interruption APIs.
 macOS, not AgentControl, applies the user's Focus configuration. The app's own
 quiet-hours policy is independently tested with a deterministic clock.
 

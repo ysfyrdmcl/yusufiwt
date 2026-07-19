@@ -15,7 +15,7 @@ for path in \
   Packages/AgentControlKit/Tests/AgentMacUITests/Phase10NavigationTests.swift \
   Extensions/agentcontrol-navigation/package.json \
   Extensions/agentcontrol-navigation/src/extension.ts \
-  Apps/macOS/Resources/Phase10.xcstrings \
+  Apps/macOS/Resources/Localizable.xcstrings \
   Apps/macOS/Info.plist \
   Docs/PHASE_10_TEST_PLAN.md \
   Docs/ADR/0016-phase10-navigation-and-onboarding.md
@@ -43,7 +43,23 @@ if rg -n '(/bin/(sh|zsh|bash)|shell -c)' Packages/AgentControlKit/Sources/AgentM
   exit 1
 fi
 
-jq -e '.strings | to_entries | all(.value.localizations.en.stringUnit.value and .value.localizations.tr.stringUnit.value)' \
-  Apps/macOS/Resources/Phase10.xcstrings >/dev/null
+jq -e '
+  . as $catalog
+  | [
+      "sidebar.integrations",
+      "integrations.title",
+      "integration.state.healthy",
+      "navigation.result.exactPane",
+      "navigation.result.unsupported",
+      "onboarding.title",
+      "onboarding.navigation.accessibility",
+      "onboarding.verify.success"
+    ]
+  | all(.[];
+      . as $key
+      | ($catalog.strings[$key].localizations.en.stringUnit.value? // "") != ""
+      and ($catalog.strings[$key].localizations.tr.stringUnit.value? // "") != ""
+    )
+' Apps/macOS/Resources/Localizable.xcstrings >/dev/null
 
 echo 'phase 10 contract: ok'

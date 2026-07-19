@@ -40,6 +40,7 @@ public enum ProductFeature: String, Codable, CaseIterable, Sendable, Hashable {
 }
 
 public enum ReleaseProfile: String, Codable, CaseIterable, Sendable {
+    case macLocalV1 = "mac_local_v1"
     case internalAlpha = "internal_alpha"
     case beta
     case stable
@@ -71,6 +72,11 @@ public struct ReleaseFeatureConfiguration: Codable, Sendable, Equatable {
     public static let internalAlpha = ReleaseFeatureConfiguration(
         profile: .internalAlpha,
         enabled: Set(ProductFeature.allCases)
+    )
+
+    public static let macLocalV1 = ReleaseFeatureConfiguration(
+        profile: .macLocalV1,
+        enabled: [.providerHooks, .redactedDiagnosticFeedback]
     )
 
     public func isEnabled(_ feature: ProductFeature) -> Bool {

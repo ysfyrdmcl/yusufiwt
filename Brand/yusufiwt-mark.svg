@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">yusufiwt decision-flow mark</title>
+  <desc id="desc">A cyan and violet branching lowercase y on a dark navy squircle, with three terminal points.</desc>
+  <defs>
+    <linearGradient id="navy" x1="160" y1="96" x2="864" y2="928" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#102B4D"/>
+      <stop offset="1" stop-color="#071426"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="270" y1="280" x2="754" y2="790" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#35D9FF"/>
+      <stop offset="0.52" stop-color="#638CFF"/>
+      <stop offset="1" stop-color="#A66BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#050B18"/>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="url(#navy)" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="10"/>
+  <path d="M280 288 C280 410 402 452 512 520 C622 452 744 410 744 288 M512 520 C512 614 512 696 512 792"
+        fill="none" stroke="url(#flow)" stroke-width="82" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="280" cy="288" r="58" fill="#35D9FF"/>
+  <circle cx="744" cy="288" r="58" fill="#A66BFF"/>
+  <circle cx="512" cy="792" r="58" fill="#7485FF"/>
+</svg>

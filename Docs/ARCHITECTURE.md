@@ -29,7 +29,7 @@ repair, backup restore, and scoped uninstall. Multi-provider onboarding
 prepares every diff before writing and uses `IntegrationManagerActor` to roll
 back earlier writes if a later file fails. Receipts store pre/post hashes and
 managed block IDs; backup restore fails closed after an external edit, while
-uninstall removes marked AgentControl entries from the current file so user
+uninstall removes marked yusufiwt entries from the current file so user
 changes are preserved.
 
 ADR 0017 limits execution to one local Mac. The local helper is the only agent

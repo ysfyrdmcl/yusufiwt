@@ -1,6 +1,8 @@
-# AgentControl
+# yusufiwt
 
-Native Swift operations center for AI coding agents. The authoritative scope and phase order are defined in [`AgentControl_PROJECT_PLAN.md`](AgentControl_PROJECT_PLAN.md).
+Native Swift operations center for AI coding agents. The authoritative scope and phase order are defined in [`yusufiwt_PROJECT_PLAN.md`](yusufiwt_PROJECT_PLAN.md).
+
+The current installable release is **Mac Local V1**: account-free, offline-capable macOS monitoring and local decisions. Companion, relay, APNs, Sparkle and store distribution code is preserved for V2 and is excluded from the Mac Local build/runtime gate. See [`Docs/MAC_LOCAL_V1_SCOPE.md`](Docs/MAC_LOCAL_V1_SCOPE.md).
 
 ## Development
 
@@ -9,6 +11,8 @@ Requirements: Xcode 26.6, Swift 6.3, Homebrew, and `make`.
 ```sh
 make bootstrap && make generate && make test
 ```
+
+Build and verify the local release with `make package-mac-local` and `make verify-mac-local-v1`.
 
 Phases 0–7 provide the repository foundation, deterministic domain/wire
 contracts, SQLite persistence, the independent macOS LaunchAgent helper, and a

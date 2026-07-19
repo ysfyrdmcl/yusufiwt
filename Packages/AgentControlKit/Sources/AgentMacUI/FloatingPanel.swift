@@ -1,49 +1,48 @@
 #if os(macOS)
+    import AgentDomain
+    import AgentPersistence
     import AppKit
+    import Observation
     import SwiftUI
 
-    public struct DisplayGeometry: Sendable, Equatable {
-        public let identifier: String
-        public let frame: CGRect
-        public let visibleFrame: CGRect
-
-        public init(identifier: String, frame: CGRect, visibleFrame: CGRect) {
-            self.identifier = identifier
-            self.frame = frame
-            self.visibleFrame = visibleFrame
-        }
-    }
-
-    public enum FloatingPanelPlacement {
-        public static func frame(
-            panelSize: CGSize,
-            displays: [DisplayGeometry],
-            cursorLocation: CGPoint,
-            preferredDisplayID: String? = nil,
-            topPadding: CGFloat = 12
-        ) -> CGRect? {
-            guard !displays.isEmpty else { return nil }
-            let display = preferredDisplayID.flatMap { id in displays.first(where: { $0.identifier == id }) }
-                ?? displays.first(where: { $0.frame.contains(cursorLocation) })
-                ?? displays.first
-            guard let display else { return nil }
-            let visible = display.visibleFrame
-            let width = min(panelSize.width, visible.width)
-            let height = min(panelSize.height, visible.height)
-            let horizontalOrigin = min(max(visible.minX, visible.midX - width / 2), visible.maxX - width)
-            let verticalOrigin = max(visible.minY, visible.maxY - height - topPadding)
-            return CGRect(x: horizontalOrigin, y: verticalOrigin, width: width, height: height)
-        }
-    }
-
     @MainActor
+    @Observable
+    // The coordinator keeps AppKit window lifecycle and the observation transition loop on the main actor.
+    // swiftlint:disable:next type_body_length
     public final class FloatingPanelCoordinator {
-        private let store: AgentControlStore
-        private var panel: AgentControlPanel?
-        private var observers: [NSObjectProtocol] = []
+        public private(set) var mode: NotchPanelMode = .compact
+        public private(set) var notchWidth: CGFloat = 0
+        public private(set) var notchHeight: CGFloat = 0
 
-        public init(store: AgentControlStore) {
+        @ObservationIgnored
+        private let store: AgentControlStore
+        @ObservationIgnored
+        private var notificationPreferences: MacNotificationPreferences
+        @ObservationIgnored
+        private var panel: AgentControlPanel?
+        @ObservationIgnored
+        private var observers: [NSObjectProtocol] = []
+        @ObservationIgnored
+        private var collapseTask: Task<Void, Never>?
+        @ObservationIgnored
+        private var knownDecisionKeys: Set<String> = []
+        @ObservationIgnored
+        private var knownSessionFingerprints: [SessionID: String] = [:]
+        @ObservationIgnored
+        private var highlightedSessionID: SessionID?
+        @ObservationIgnored
+        private var knownAlertIDs: Set<String> = []
+        @ObservationIgnored
+        private var highlightedAlertID: String?
+        @ObservationIgnored
+        private var isObservingStore = false
+
+        public init(
+            store: AgentControlStore,
+            notificationPreferences: MacNotificationPreferences = .init()
+        ) {
             self.store = store
+            self.notificationPreferences = notificationPreferences
             let center = NotificationCenter.default
             observers.append(center.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -61,7 +60,23 @@
             })
         }
 
+        public func start() {
+            guard !isObservingStore else { return }
+            isObservingStore = true
+            let panel = panel ?? makePanel()
+            self.panel = panel
+            captureCurrentStoreState()
+            mode = store.pendingDecisions.isEmpty || !shouldPresentDecisions ? .compact : .decision
+            store.isPanelExpanded = mode.showsDetails
+            updateSize(animated: false)
+            panel.orderFrontRegardless()
+            observeStore()
+        }
+
         public func stop() {
+            collapseTask?.cancel()
+            collapseTask = nil
+            isObservingStore = false
             for observer in observers {
                 NotificationCenter.default.removeObserver(observer)
                 NSWorkspace.shared.notificationCenter.removeObserver(observer)
@@ -75,71 +90,79 @@
         }
 
         public func toggle() {
-            if isVisible {
-                hide()
-            } else {
-                show()
+            switch mode {
+            case .expanded:
+                setExpanded(false)
+            case .decision:
+                setMode(.expanded, animated: true, makeKey: true)
+            case .compact, .activity:
+                setMode(.expanded, animated: true, makeKey: true)
             }
         }
 
         public func show() {
             let panel = panel ?? makePanel()
             self.panel = panel
-            updateSize(animated: false)
-            panel.orderFrontRegardless()
-            panel.makeKey()
+            setMode(.expanded, animated: false, makeKey: true)
         }
 
         public func hide() {
-            panel?.orderOut(nil)
+            setExpanded(false)
         }
 
         public func setExpanded(_ expanded: Bool) {
-            store.isPanelExpanded = expanded
-            updateSize(animated: true)
+            let collapsedMode: NotchPanelMode = store.pendingDecisions.isEmpty ? .compact : .decision
+            setMode(expanded ? .expanded : collapsedMode, animated: true, makeKey: expanded)
+        }
+
+        public func presentInbox() {
+            setMode(.expanded, animated: true, makeKey: true)
+        }
+
+        public func updateNotificationPreferences(_ value: MacNotificationPreferences) {
+            notificationPreferences = value
+            if !value.enabled, store.pendingDecisions.isEmpty, mode != .expanded {
+                setMode(.compact, animated: true)
+            }
         }
 
         public func reposition() {
-            guard let panel else { return }
-            let displays = NSScreen.screens.map(DisplayGeometry.init)
-            guard let target = FloatingPanelPlacement.frame(
-                panelSize: panel.frame.size,
-                displays: displays,
-                cursorLocation: NSEvent.mouseLocation
-            ) else { return }
-            panel.setFrameOrigin(target.origin)
+            guard panel != nil else { return }
+            updateSize(animated: false)
         }
 
         private func makePanel() -> AgentControlPanel {
             let panel = AgentControlPanel(
-                contentRect: .zero,
-                styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+                contentRect: CGRect(x: 0, y: 0, width: 280, height: 38),
+                styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
-            panel.isMovableByWindowBackground = true
+            panel.isMovableByWindowBackground = false
             panel.isReleasedWhenClosed = false
             panel.hidesOnDeactivate = false
-            panel.level = .floating
+            panel.level = .statusBar
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = true
+            panel.becomesKeyOnlyIfNeeded = true
+            panel.cancelHandler = { [weak self] in self?.setExpanded(false) }
             panel.contentView = NSHostingView(rootView: FloatingPanelView(store: store, coordinator: self))
             return panel
         }
 
         private func updateSize(animated: Bool) {
             guard let panel else { return }
-            let size = store.isPanelExpanded ? CGSize(width: 480, height: 430) : CGSize(width: 360, height: 54)
             let displays = NSScreen.screens.map(DisplayGeometry.init)
-            guard let frame = FloatingPanelPlacement.frame(
-                panelSize: size,
-                displays: displays,
-                cursorLocation: NSEvent.mouseLocation
-            ) else { return }
+            guard let display = displays.first(where: { $0.notchFrame != nil })
+                ?? displays.first(where: { $0.frame.contains(NSEvent.mouseLocation) })
+                ?? displays.first
+            else { return }
+            notchWidth = display.notchFrame?.width ?? 0
+            notchHeight = display.notchFrame?.height ?? 0
+            let size = panelSize(for: mode, notchWidth: notchWidth, notchHeight: notchHeight)
+            let frame = FloatingPanelPlacement.frame(panelSize: size, display: display)
             if animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = 0.18
@@ -149,9 +172,163 @@
                 panel.setFrame(frame, display: true)
             }
         }
+
+        private func panelSize(for mode: NotchPanelMode, notchWidth: CGFloat, notchHeight: CGFloat) -> CGSize {
+            let compactWidth = max(430, notchWidth + 280)
+            let headerHeight = max(40, notchHeight)
+            let visibleRows = min(4, store.liveSessions().count + store.pendingDecisions.count)
+            let expandedDetailHeight = min(440, max(250, 78 + CGFloat(visibleRows) * 96))
+            return switch mode {
+            case .compact:
+                CGSize(width: compactWidth, height: headerHeight)
+            case .activity:
+                CGSize(width: max(520, compactWidth), height: headerHeight + 110)
+            case .decision:
+                CGSize(width: max(520, compactWidth), height: headerHeight + 260)
+            case .expanded:
+                CGSize(width: max(620, compactWidth), height: headerHeight + expandedDetailHeight)
+            }
+        }
+
+        private func setMode(_ newMode: NotchPanelMode, animated: Bool, makeKey: Bool = false) {
+            collapseTask?.cancel()
+            collapseTask = nil
+            mode = newMode
+            store.isPanelExpanded = newMode.showsDetails
+            let panel = panel ?? makePanel()
+            self.panel = panel
+            updateSize(animated: animated)
+            panel.orderFrontRegardless()
+            if makeKey {
+                panel.makeKey()
+            }
+        }
+
+        private func observeStore() {
+            guard isObservingStore else { return }
+            withObservationTracking {
+                _ = store.pendingDecisions.map { "\($0.requestID.uuidString):\($0.revision)" }
+                _ = store.sessions.map { "\($0.id.description):\($0.state.rawValue):\($0.snapshotRevision)" }
+                _ = store.activeAlerts.map(\.id)
+            } onChange: { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.isObservingStore else { return }
+                    self.handleStoreMutation()
+                    self.observeStore()
+                }
+            }
+        }
+
+        private func handleStoreMutation() {
+            let decisionKeys = Set(store.pendingDecisions.map { "\($0.requestID.uuidString):\($0.revision)" })
+            let hasNewDecision = !decisionKeys.subtracting(knownDecisionKeys).isEmpty
+            let removedDecision = !knownDecisionKeys.subtracting(decisionKeys).isEmpty
+            knownDecisionKeys = decisionKeys
+
+            let fingerprints = Dictionary(uniqueKeysWithValues: store.sessions.map {
+                ($0.id, "\($0.state.rawValue):\($0.snapshotRevision)")
+            })
+            let changedSession = store.sessions
+                .filter { knownSessionFingerprints[$0.id] != fingerprints[$0.id] }
+                .max { lhs, rhs in lhs.state.attentionPriority < rhs.state.attentionPriority }
+            knownSessionFingerprints = fingerprints
+
+            if mode == .expanded {
+                updateSize(animated: true)
+            }
+
+            if !store.pendingDecisions.isEmpty {
+                if shouldPresentDecisions, mode != .expanded, hasNewDecision || mode == .decision {
+                    setMode(.decision, animated: true)
+                }
+                return
+            }
+
+            if removedDecision, shouldPresentDecisions {
+                highlightedSessionID = changedSession?.id
+                setMode(.activity, animated: true)
+                scheduleCompact(after: .seconds(2))
+                return
+            }
+
+            let alertIDs = Set(store.activeAlerts.map(\.id))
+            let newAlertID = alertIDs.subtracting(knownAlertIDs).first
+            knownAlertIDs = alertIDs
+            if let newAlertID, shouldPresentLongRunningAlerts {
+                highlightedAlertID = newAlertID
+                highlightedSessionID = nil
+                setMode(.activity, animated: true)
+                scheduleCompact(after: .seconds(5))
+                return
+            }
+
+            if let changedSession, shouldPresent(state: changedSession.state) {
+                highlightedSessionID = changedSession.id
+                highlightedAlertID = nil
+                setMode(.activity, animated: true)
+                scheduleCompact(after: .seconds(5))
+            }
+        }
+
+        private func captureCurrentStoreState() {
+            knownDecisionKeys = Set(store.pendingDecisions.map { "\($0.requestID.uuidString):\($0.revision)" })
+            knownSessionFingerprints = Dictionary(uniqueKeysWithValues: store.sessions.map {
+                ($0.id, "\($0.state.rawValue):\($0.snapshotRevision)")
+            })
+            knownAlertIDs = Set(store.activeAlerts.map(\.id))
+        }
+
+        private func scheduleCompact(after duration: Duration) {
+            collapseTask?.cancel()
+            collapseTask = Task { [weak self] in
+                do {
+                    try await Task.sleep(for: duration)
+                } catch {
+                    return
+                }
+                guard let self, mode == .activity, store.pendingDecisions.isEmpty else { return }
+                setMode(.compact, animated: true)
+            }
+        }
+
+        var highlightedSession: SessionListItem? {
+            guard let highlightedSessionID else { return nil }
+            return store.sessions.first(where: { $0.id == highlightedSessionID })
+        }
+
+        var highlightedAlert: SessionAlert? {
+            guard let highlightedAlertID else { return nil }
+            return store.activeAlerts.first(where: { $0.id == highlightedAlertID })
+        }
+
+        private var shouldPresentDecisions: Bool {
+            // A pending decision is part of the in-app control surface, not a system
+            // notification. It must remain actionable even when notifications are disabled.
+            true
+        }
+
+        private var shouldPresentLongRunningAlerts: Bool {
+            notificationPreferences.enabled && notificationPreferences.longRunningIdleNotificationsEnabled
+        }
+
+        private func shouldPresent(state: SessionState) -> Bool {
+            guard notificationPreferences.enabled else { return false }
+            return switch state {
+            case .completed:
+                notificationPreferences.completedNotificationsEnabled
+            case .failed:
+                notificationPreferences.failedNotificationsEnabled
+            case .waitingApproval, .waitingInput:
+                notificationPreferences.decisionNotificationsEnabled
+            default:
+                false
+            }
+        }
     }
 
     public final class AgentControlPanel: NSPanel {
+        fileprivate var cancelHandler: (() -> Void)?
+
         override public var canBecomeKey: Bool {
             true
         }
@@ -159,187 +336,10 @@
         override public var canBecomeMain: Bool {
             false
         }
-    }
 
-    public struct FloatingPanelView: View {
-        @Bindable var store: AgentControlStore
-        let coordinator: FloatingPanelCoordinator
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-        public init(store: AgentControlStore, coordinator: FloatingPanelCoordinator) {
-            self.store = store
-            self.coordinator = coordinator
-        }
-
-        public var body: some View {
-            VStack(spacing: 0) {
-                HStack(spacing: AgentControlSpacing.standard) {
-                    Image(systemName: store.pendingDecisions.isEmpty ? "bolt.circle.fill" : "exclamationmark.circle.fill")
-                        .foregroundStyle(store.pendingDecisions.isEmpty ? Color.accentColor : .orange)
-                    HStack(spacing: 4) {
-                        Text(store.activeSessions.count, format: .number)
-                        Text("panel.active")
-                    }
-                    .font(.headline)
-                    if !store.pendingDecisions.isEmpty {
-                        HStack(spacing: 4) {
-                            Text(store.pendingDecisions.count, format: .number)
-                            Text("panel.inbox")
-                        }
-                        .font(.caption.bold())
-                        .foregroundStyle(.orange)
-                    }
-                    Spacer()
-                    Button {
-                        coordinator.setExpanded(!store.isPanelExpanded)
-                    } label: {
-                        Image(systemName: store.isPanelExpanded ? "chevron.up" : "chevron.down")
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(store.isPanelExpanded ? "panel.collapse" : "panel.expand")
-                }
-                .padding(.horizontal, AgentControlSpacing.standard)
-                .frame(height: 54)
-
-                if store.isPanelExpanded {
-                    Divider()
-                    ScrollView {
-                        LazyVStack(spacing: AgentControlSpacing.compact) {
-                            if let decision = store.pendingDecisions.first {
-                                DecisionRow(store: store, decision: decision)
-                                    .agentCard()
-                            }
-                            ForEach(store.activeSessions.prefix(8), id: \.id) { session in
-                                SessionRow(item: session).agentCard()
-                            }
-                            if store.activeSessions.isEmpty, store.pendingDecisions.isEmpty {
-                                ContentUnavailableView("empty.active.title", systemImage: "moon.stars", description: Text("empty.active.message"))
-                            }
-                        }
-                        .padding(AgentControlSpacing.standard)
-                    }
-                }
-            }
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(.quaternary)
-            }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: store.isPanelExpanded)
+        override public func cancelOperation(_: Any?) {
+            cancelHandler?()
         }
     }
 
-    @MainActor
-    public struct GlobalHotKeySetting: Codable, Hashable {
-        public static let currentVersion = 1
-        public static let controlOptionSpace = GlobalHotKeySetting(
-            version: currentVersion,
-            keyCode: 49,
-            modifierRawValue: NSEvent.ModifierFlags([.control, .option]).rawValue
-        )
-        public static let commandShiftA = GlobalHotKeySetting(
-            version: currentVersion,
-            keyCode: 0,
-            modifierRawValue: NSEvent.ModifierFlags([.command, .shift]).rawValue
-        )
-
-        public let version: Int
-        public let keyCode: UInt16
-        public let modifierRawValue: UInt
-
-        public init(version: Int = currentVersion, keyCode: UInt16, modifierRawValue: UInt) {
-            self.version = version
-            self.keyCode = keyCode
-            self.modifierRawValue = modifierRawValue
-        }
-
-        fileprivate var modifiers: NSEvent.ModifierFlags {
-            NSEvent.ModifierFlags(rawValue: modifierRawValue)
-                .intersection(.deviceIndependentFlagsMask)
-        }
-    }
-
-    @MainActor
-    public final class GlobalHotKeyPreferences {
-        public static let storageKey = "globalHotKey.v1"
-        private let defaults: UserDefaults
-
-        public init(defaults: UserDefaults = .standard) {
-            self.defaults = defaults
-        }
-
-        public func load() -> GlobalHotKeySetting {
-            guard let data = defaults.data(forKey: Self.storageKey),
-                  let value = try? JSONDecoder().decode(GlobalHotKeySetting.self, from: data),
-                  value.version == GlobalHotKeySetting.currentVersion
-            else { return .controlOptionSpace }
-            return value
-        }
-
-        public func save(_ value: GlobalHotKeySetting) {
-            guard let data = try? JSONEncoder().encode(value) else { return }
-            defaults.set(data, forKey: Self.storageKey)
-        }
-    }
-
-    @MainActor
-    public final class GlobalHotKeyController {
-        private var globalMonitor: Any?
-        private var localMonitor: Any?
-        private let action: @MainActor () -> Void
-        private var setting: GlobalHotKeySetting
-
-        public init(
-            setting: GlobalHotKeySetting = .controlOptionSpace,
-            action: @escaping @MainActor () -> Void
-        ) {
-            self.setting = setting
-            self.action = action
-        }
-
-        public func update(_ value: GlobalHotKeySetting) {
-            let wasRunning = globalMonitor != nil || localMonitor != nil
-            stop()
-            setting = value
-            if wasRunning {
-                start()
-            }
-        }
-
-        public func start() {
-            guard globalMonitor == nil, localMonitor == nil else { return }
-            globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard self?.matches(event) == true else { return }
-                Task { @MainActor in self?.action() }
-            }
-            localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard self?.matches(event) == true else { return event }
-                self?.action()
-                return nil
-            }
-        }
-
-        public func stop() {
-            if let globalMonitor {
-                NSEvent.removeMonitor(globalMonitor)
-            }
-            if let localMonitor {
-                NSEvent.removeMonitor(localMonitor)
-            }
-            globalMonitor = nil
-            localMonitor = nil
-        }
-
-        private func matches(_ event: NSEvent) -> Bool {
-            event.keyCode == setting.keyCode
-                && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == setting.modifiers
-        }
-    }
-
-    private extension DisplayGeometry {
-        init(screen: NSScreen) {
-            let identifier = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.stringValue
-                ?? String(describing: screen)
-            self.init(identifier: identifier, frame: screen.frame, visibleFrame: screen.visibleFrame)
-        }
-    }
 #endif

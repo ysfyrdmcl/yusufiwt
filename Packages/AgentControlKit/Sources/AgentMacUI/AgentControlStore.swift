@@ -70,6 +70,17 @@
             sessions.filter { !$0.state.isTerminal }
         }
 
+        /// Sessions that have produced a provider event recently enough to still be live.
+        /// This keeps abandoned hook records from making the always-on notch look busy forever.
+        public func liveSessions(
+            at referenceDate: Date = Date(),
+            inactivityLimit: TimeInterval = 20 * 60
+        ) -> [SessionListItem] {
+            activeSessions.filter {
+                referenceDate.timeIntervalSince($0.lastMeaningfulEventAt) <= inactivityLimit
+            }
+        }
+
         public var attentionSessions: [SessionListItem] {
             sessions.filter { [.waitingApproval, .waitingInput, .failed].contains($0.state) }
         }
@@ -89,7 +100,7 @@
             transport: any AgentControlTransport = XPCAgentControlTransport(),
             notificationCoordinator: MacNotificationCoordinator? = nil,
             navigator: (any TerminalNavigating)? = nil,
-            refreshInterval: Duration = .seconds(2)
+            refreshInterval: Duration = .seconds(10)
         ) {
             self.transport = transport
             self.notificationCoordinator = notificationCoordinator
@@ -119,6 +130,44 @@
             notificationTask = nil
             Task { [transport] in await transport.disconnect() }
         }
+
+        #if DEBUG
+            public func loadNotchDemo(now: Date = Date()) {
+                stop()
+                connectionState = .online
+                pendingDecisions = []
+                activeAlerts = []
+                selectedSession = nil
+                selectedEvents = []
+                sessions = [
+                    SessionListItem(
+                        id: SessionID(UUID()),
+                        projectName: "yusufiwt · Polish the live notch panel",
+                        adapterID: AdapterID("codex"),
+                        state: .executing,
+                        startedAt: now.addingTimeInterval(-31 * 60),
+                        lastMeaningfulEventAt: now.addingTimeInterval(-4),
+                        snapshotRevision: 3
+                    ),
+                    SessionListItem(
+                        id: SessionID(UUID()),
+                        projectName: "website · Verify responsive layout",
+                        adapterID: AdapterID("claude"),
+                        state: .thinking,
+                        startedAt: now.addingTimeInterval(-42),
+                        lastMeaningfulEventAt: now.addingTimeInterval(-2),
+                        snapshotRevision: 2
+                    )
+                ]
+            }
+
+            public func resumeLiveData() {
+                sessions = []
+                pendingDecisions = []
+                connectionState = .loading
+                start()
+            }
+        #endif
 
         public func refreshNow() async {
             do {
@@ -249,7 +298,8 @@
         }
 
         public func handleNavigationCallback(_ url: URL) {
-            guard url.scheme == "agentcontrol", url.host == "navigation-result",
+            guard let scheme = url.scheme?.lowercased(), ["agentcontrol", "yusufiwt"].contains(scheme),
+                  url.host == "navigation-result",
                   let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                   let token = components.queryItems?.first(where: { $0.name == "token" })?.value,
                   token == pendingNavigationToken,
@@ -369,6 +419,8 @@
         }
 
         private func consume(_ notification: RegistryNotification) async {
+            let projectName = sessions.first(where: { $0.id == notification.sessionID })?.projectName
+            await notificationCoordinator?.reconcile(notification, projectName: projectName)
             if let index = sessions.firstIndex(where: { $0.id == notification.sessionID }) {
                 let current = sessions[index]
                 sessions[index] = SessionListItem(
@@ -376,6 +428,7 @@
                     projectName: current.projectName,
                     adapterID: current.adapterID,
                     state: notification.state,
+                    startedAt: current.startedAt,
                     lastMeaningfulEventAt: Date(),
                     snapshotRevision: notification.snapshotRevision
                 )

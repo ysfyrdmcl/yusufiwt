@@ -10,6 +10,7 @@ for path in \
   Packages/AgentControlKit/Sources/AgentMacUI/DashboardViews.swift \
   Packages/AgentControlKit/Sources/AgentMacUI/DesignSystem.swift \
   Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift \
+  Packages/AgentControlKit/Sources/AgentMacUI/GlobalHotKey.swift \
   Packages/AgentControlKit/Tests/AgentMacUITests/AgentMacUITests.swift \
   Apps/macOS/Resources/Localizable.xcstrings \
   Docs/PHASE_7_TEST_PLAN.md \
@@ -19,11 +20,16 @@ do
 done
 
 grep -q 'MenuBarExtra' Apps/macOS/AgentControlMacApp.swift
+grep -Eq '^[[:space:]]*Window\(.*id: "dashboard"' Apps/macOS/AgentControlMacApp.swift
+if grep -Eq '^[[:space:]]*WindowGroup\(.*id: "dashboard"' Apps/macOS/AgentControlMacApp.swift; then
+  echo 'dashboard scene must be a single Window' >&2
+  exit 1
+fi
 grep -q 'NSPanel' Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift
-grep -q 'addGlobalMonitorForEvents' Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift
-grep -q 'controlOptionSpace' Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift
-grep -q 'keyCode: 49' Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift
-grep -q 'GlobalHotKeyPreferences' Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift
+grep -q 'addGlobalMonitorForEvents' Packages/AgentControlKit/Sources/AgentMacUI/GlobalHotKey.swift
+grep -q 'controlOptionSpace' Packages/AgentControlKit/Sources/AgentMacUI/GlobalHotKey.swift
+grep -q 'keyCode: 49' Packages/AgentControlKit/Sources/AgentMacUI/GlobalHotKey.swift
+grep -q 'GlobalHotKeyPreferences' Packages/AgentControlKit/Sources/AgentMacUI/GlobalHotKey.swift
 grep -q 'List(store.activeSessions' Packages/AgentControlKit/Sources/AgentMacUI/DashboardViews.swift
 grep -q 'accessibilityDisplayShouldReduceMotion' Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift
 grep -q 'notifications() async -> AsyncStream' Packages/AgentControlKit/Sources/AgentMacUI/AgentControlTransport.swift

@@ -90,10 +90,7 @@ private struct SignInView: View {
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
-            Image(systemName: "switch.2")
-                .font(.system(size: 64, weight: .semibold))
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
+            YusufiwtBrandMark(size: 88)
             VStack(spacing: 8) {
                 Text(String(localized: "app.name"))
                     .font(.largeTitle.bold())

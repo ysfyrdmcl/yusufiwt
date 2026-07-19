@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs><linearGradient id="flow" x1="270" y1="280" x2="754" y2="790" gradientUnits="userSpaceOnUse"><stop stop-color="#35D9FF"/><stop offset="0.52" stop-color="#638CFF"/><stop offset="1" stop-color="#A66BFF"/></linearGradient></defs>
+  <path d="M280 288 C280 410 402 452 512 520 C622 452 744 410 744 288 M512 520 C512 614 512 696 512 792" fill="none" stroke="url(#flow)" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="280" cy="288" r="64" fill="#35D9FF"/><circle cx="744" cy="288" r="64" fill="#A66BFF"/><circle cx="512" cy="792" r="64" fill="#7485FF"/>
+</svg>

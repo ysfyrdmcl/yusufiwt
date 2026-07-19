@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: bootstrap generate test contract-test swift-test relay-test persistence-performance xcode-test lint release-verify operations-verify clean
+.PHONY: bootstrap generate test contract-test swift-test relay-test persistence-performance xcode-test lint release-verify operations-verify build-mac-local package-mac-local install-mac-local uninstall-mac-local test-mac-local verify-mac-local-v1 clean
 
 bootstrap:
 	./Scripts/bootstrap.sh
@@ -40,5 +40,23 @@ release-verify:
 operations-verify:
 	ruby Scripts/verify_phase17.rb --structural
 
+build-mac-local:
+	./Scripts/build_mac_local.sh
+
+package-mac-local:
+	./Scripts/package_mac_local.sh
+
+install-mac-local:
+	./Scripts/install_mac_local.sh
+
+uninstall-mac-local:
+	./Scripts/uninstall_mac_local.sh
+
+test-mac-local:
+	./Scripts/test_mac_local.sh
+
+verify-mac-local-v1:
+	./Scripts/verify_mac_local_v1.sh
+
 clean:
-	rm -rf .build AgentControl.xcodeproj
+	rm -rf .build yusufiwt.xcodeproj AgentControl.xcodeproj

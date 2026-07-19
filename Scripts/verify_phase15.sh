@@ -35,6 +35,6 @@ Scripts/test_database_recovery.sh
 grep -q 'accessibilityLabel' Packages/AgentControlKit/Sources/AgentMacUI/DashboardViews.swift
 grep -q 'keyboardShortcut(.defaultAction)' Packages/AgentControlKit/Sources/AgentMacUI/DecisionViews.swift
 grep -q 'accessibilityLabel' Apps/iOS/CompanionViews.swift
-grep -q 'accessibilityReduceMotion' Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift
+grep -q 'accessibilityReduceMotion' Packages/AgentControlKit/Sources/AgentMacUI/NotchPanelView.swift
 
 echo 'phase 15 privacy/localization/accessibility/recovery gates: ok'

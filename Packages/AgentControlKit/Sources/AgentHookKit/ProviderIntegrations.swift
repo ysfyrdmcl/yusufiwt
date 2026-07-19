@@ -241,17 +241,17 @@
             let events: [EventDefinition] = switch provider {
             case .codex:
                 [
-                    EventDefinition("SessionStart", timeout: 1), EventDefinition("UserPromptSubmit", timeout: 1),
-                    EventDefinition("PreToolUse", timeout: 1), EventDefinition("PermissionRequest", timeout: 60),
-                    EventDefinition("PostToolUse", timeout: 1), EventDefinition("Stop", timeout: 1)
+                    EventDefinition("SessionStart", timeout: 5), EventDefinition("UserPromptSubmit", timeout: 5),
+                    EventDefinition("PreToolUse", timeout: 70), EventDefinition("PermissionRequest", timeout: 70),
+                    EventDefinition("PostToolUse", timeout: 5), EventDefinition("Stop", timeout: 5)
                 ]
             case .claude:
                 [
-                    EventDefinition("SessionStart", timeout: 1), EventDefinition("UserPromptSubmit", timeout: 1),
-                    EventDefinition("PreToolUse", timeout: 1), EventDefinition("PermissionRequest", timeout: 60),
-                    EventDefinition("PostToolUse", timeout: 1), EventDefinition("Notification", timeout: 1),
-                    EventDefinition("Elicitation", timeout: 60), EventDefinition("Stop", timeout: 1),
-                    EventDefinition("SessionEnd", timeout: 1)
+                    EventDefinition("SessionStart", timeout: 5), EventDefinition("UserPromptSubmit", timeout: 5),
+                    EventDefinition("PreToolUse", timeout: 5), EventDefinition("PermissionRequest", timeout: 70),
+                    EventDefinition("PostToolUse", timeout: 5), EventDefinition("Notification", timeout: 5),
+                    EventDefinition("Elicitation", timeout: 60), EventDefinition("Stop", timeout: 5),
+                    EventDefinition("SessionEnd", timeout: 5)
                 ]
             case .gemini:
                 [

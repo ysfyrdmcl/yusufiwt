@@ -10,6 +10,8 @@
 	<string>$(RELAY_BASE_URL)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>yusufiwt</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -17,7 +19,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>yusufiwt</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -30,13 +32,14 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>agentcontrol</string>
+				<string>yusufiwt</string>
 			</array>
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Scan the pairing QR code shown by AgentControl on your Mac.</string>
+	<string>Scan the pairing QR code shown by yusufiwt on your Mac.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Confirm high-risk agent decisions before sending them to your Mac.</string>
 	<key>NSSupportsLiveActivities</key>

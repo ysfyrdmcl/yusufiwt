@@ -25,19 +25,61 @@
     public struct MacNotificationPreferences: Codable, Sendable, Equatable {
         public var enabled: Bool
         public var soundEnabled: Bool
+        public var decisionNotificationsEnabled: Bool
+        public var completedNotificationsEnabled: Bool
+        public var failedNotificationsEnabled: Bool
+        public var longRunningIdleNotificationsEnabled: Bool
         public var focusAware: Bool
         public var quietHours: QuietHours?
+        public var privacyLevel: NotificationPrivacyLevel
 
         public init(
             enabled: Bool = true,
             soundEnabled: Bool = true,
+            decisionNotificationsEnabled: Bool = true,
+            completedNotificationsEnabled: Bool = true,
+            failedNotificationsEnabled: Bool = true,
+            longRunningIdleNotificationsEnabled: Bool = true,
             focusAware: Bool = true,
-            quietHours: QuietHours? = nil
+            quietHours: QuietHours? = nil,
+            privacyLevel: NotificationPrivacyLevel = .generic
         ) {
             self.enabled = enabled
             self.soundEnabled = soundEnabled
+            self.decisionNotificationsEnabled = decisionNotificationsEnabled
+            self.completedNotificationsEnabled = completedNotificationsEnabled
+            self.failedNotificationsEnabled = failedNotificationsEnabled
+            self.longRunningIdleNotificationsEnabled = longRunningIdleNotificationsEnabled
             self.focusAware = focusAware
             self.quietHours = quietHours
+            self.privacyLevel = privacyLevel
+        }
+    }
+
+    public enum NotificationPrivacyLevel: String, Codable, CaseIterable, Sendable, Equatable {
+        case generic
+        case projectAndEvent
+    }
+
+    public final class MacNotificationPreferencesStore: @unchecked Sendable {
+        private let defaults: UserDefaults
+        private let key: String
+
+        public init(defaults: UserDefaults = .standard, key: String = "mac-local.notification-preferences") {
+            self.defaults = defaults
+            self.key = key
+        }
+
+        public func load() -> MacNotificationPreferences {
+            guard let data = defaults.data(forKey: key),
+                  let value = try? JSONDecoder().decode(MacNotificationPreferences.self, from: data)
+            else { return MacNotificationPreferences() }
+            return value
+        }
+
+        public func save(_ value: MacNotificationPreferences) {
+            guard let data = try? JSONEncoder().encode(value) else { return }
+            defaults.set(data, forKey: key)
         }
     }
 

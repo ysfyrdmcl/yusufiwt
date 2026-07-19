@@ -326,7 +326,7 @@ public enum CompanionDeepLink: Equatable, Sendable {
     case pairing
 
     public init?(url: URL) {
-        guard url.scheme?.lowercased() == "agentcontrol" else { return nil }
+        guard let scheme = url.scheme?.lowercased(), ["agentcontrol", "yusufiwt"].contains(scheme) else { return nil }
         let route = url.host?.lowercased()
         let identifier = url.pathComponents.dropFirst().first
         switch route {
@@ -392,7 +392,7 @@ public enum CompanionNotificationRenderer {
         let category = CompanionNotificationCategory.identifier(for: item)
         switch privacy {
         case .hidden:
-            return .init(title: "AgentControl", body: "An agent needs your attention.", categoryIdentifier: category)
+            return .init(title: "yusufiwt", body: "An agent needs your attention.", categoryIdentifier: category)
         case .projectOnly:
             return .init(title: item.projectName, body: "An agent needs your attention.", categoryIdentifier: category)
         case .full:
@@ -401,8 +401,8 @@ public enum CompanionNotificationRenderer {
     }
 
     public static let genericFallback = CompanionNotificationPresentation(
-        title: "AgentControl",
-        body: "Open AgentControl to review a new agent event.",
+        title: "yusufiwt",
+        body: "Open yusufiwt to review a new agent event.",
         categoryIdentifier: CompanionNotificationCategory.status
     )
 }

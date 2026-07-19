@@ -13,7 +13,8 @@ extension DatabaseActor {
         guard let connection else { throw PersistenceError.databaseClosed }
         let boundedLimit = max(1, min(limit, 1000))
         var sql = """
-        SELECT s.id, p.display_name, s.adapter_id, s.state, s.last_meaningful_event_at, s.snapshot_revision
+        SELECT s.id, p.display_name, s.adapter_id, s.state, s.started_at,
+               s.last_meaningful_event_at, s.snapshot_revision
         FROM agent_sessions s JOIN projects p ON p.id = s.project_id
         """
         var bindings: [SQLiteValue] = []
@@ -121,12 +122,14 @@ extension DatabaseActor {
     }
 
     private static func decodeSessionListItem(_ row: [SQLiteValue]) throws -> SessionListItem {
-        guard row.count == 6, let id = uuid(row[0]), let projectName = string(row[1]),
+        guard row.count == 7, let id = uuid(row[0]), let projectName = string(row[1]),
               let adapter = string(row[2]), let stateName = string(row[3]),
-              let state = SessionState(rawValue: stateName), let activity = double(row[4]), let revision = int(row[5])
+              let state = SessionState(rawValue: stateName), let started = double(row[4]),
+              let activity = double(row[5]), let revision = int(row[6])
         else { throw PersistenceError.invalidStoredValue("session list row") }
         return SessionListItem(
             id: SessionID(id), projectName: projectName, adapterID: AdapterID(adapter), state: state,
+            startedAt: Date(timeIntervalSince1970: started),
             lastMeaningfulEventAt: Date(timeIntervalSince1970: activity), snapshotRevision: revision
         )
     }

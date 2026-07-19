@@ -86,7 +86,7 @@ jobs:
         run: Scripts/release_macos.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: AgentControl-macOS-${{ inputs.version }}-${{ inputs.build_number }}-${{ inputs.channel }}
+          name: yusufiwt-macOS-${{ inputs.version }}-${{ inputs.build_number }}-${{ inputs.channel }}
           path: .build/releases/macos/
           if-no-files-found: error
           retention-days: 90
@@ -132,7 +132,7 @@ jobs:
         run: Scripts/release_ios.sh upload
       - uses: actions/upload-artifact@v4
         with:
-          name: AgentControl-iOS-${{ inputs.version }}-${{ inputs.build_number }}
+          name: yusufiwt-iOS-${{ inputs.version }}-${{ inputs.build_number }}
           path: .build/releases/ios/
           if-no-files-found: error
           retention-days: 90

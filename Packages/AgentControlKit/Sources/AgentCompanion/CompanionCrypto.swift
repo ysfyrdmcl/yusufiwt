@@ -290,7 +290,8 @@ public enum PairingQRCodeCodec {
             throw CompanionCryptoError.invalidPairingPayload
         }
         guard let components = URLComponents(string: value),
-              components.scheme?.lowercased() == "agentcontrol",
+              let scheme = components.scheme?.lowercased(),
+              ["agentcontrol", "yusufiwt"].contains(scheme),
               components.host?.lowercased() == "pair",
               var encoded = components.queryItems?.first(where: { $0.name == "payload" })?.value
         else { throw CompanionCryptoError.invalidPairingPayload }

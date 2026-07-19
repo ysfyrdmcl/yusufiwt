@@ -1,4 +1,4 @@
-# AgentControl 1.0 release checklist
+# yusufiwt 1.0 release checklist
 
 Copy `Config/Operations/release-evidence.example.json` outside the source tree,
 fill it with durable exact-build evidence, then run `make test`,

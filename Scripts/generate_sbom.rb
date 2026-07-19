@@ -42,8 +42,8 @@ bom = {
   "metadata" => {
     "component" => {
       "type" => "application",
-      "bom-ref" => "pkg:generic/agentcontrol@#{release_version}",
-      "name" => "AgentControl",
+      "bom-ref" => "pkg:generic/yusufiwt@#{release_version}",
+      "name" => "yusufiwt",
       "version" => release_version
     }
   },

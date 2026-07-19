@@ -40,11 +40,11 @@ async function captureTerminalContext(token?: string): Promise<Record<string, un
 
 async function registerTerminal(token?: string): Promise<void> {
   if (!token) {
-    token = await vscode.window.showInputBox({ prompt: "AgentControl session correlation token" });
+    token = await vscode.window.showInputBox({ prompt: "yusufiwt session correlation token" });
   }
   if (!token) return;
   const captured = await captureTerminalContext(token);
-  if (!captured) vscode.window.showWarningMessage("AgentControl: no active terminal to register.");
+  if (!captured) vscode.window.showWarningMessage("yusufiwt: no active terminal to register.");
 }
 
 async function revealTerminal(uri: vscode.Uri): Promise<void> {
@@ -63,7 +63,7 @@ async function revealTerminal(uri: vscode.Uri): Promise<void> {
   } else {
     await reportResult(token, "unsupported");
   }
-  vscode.window.showWarningMessage("AgentControl could not find the exact terminal; the workspace was opened instead.");
+  vscode.window.showWarningMessage("yusufiwt could not find the exact terminal; the workspace was opened instead.");
 }
 
 async function reportResult(token: string | null, level: string): Promise<void> {

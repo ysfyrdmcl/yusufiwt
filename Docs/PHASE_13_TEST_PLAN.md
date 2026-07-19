@@ -12,7 +12,7 @@
   - app/extension share only the declared App Group and Keychain access group.
   - High/Critical notification categories do not contain an approve action.
   - English and Turkish strings are complete.
-- `xcodebuild -project AgentControl.xcodeproj -scheme AgentControliOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`
+- `xcodebuild -project yusufiwt.xcodeproj -scheme AgentControliOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`
   - builds the iOS app and embedded Notification Service Extension with strict concurrency and warnings as errors.
 
 ## Physical-device and staging gates

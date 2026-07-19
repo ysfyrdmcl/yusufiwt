@@ -54,12 +54,42 @@ struct DomainSurfaceTests {
 
     @Test("Question choices encode stable IDs and decode legacy labels")
     func questionChoiceWireCompatibility() throws {
-        let choice = QuestionChoice(id: "debug", label: "Debug build")
+        let choice = QuestionChoice(id: "debug", label: "Debug build", description: "Uses debug symbols")
         let encoded = try JSONEncoder().encode(choice)
         #expect(String(bytes: encoded, encoding: .utf8)?.contains("debug") == true)
+        #expect(try JSONDecoder().decode(QuestionChoice.self, from: encoded).description == "Uses debug symbols")
         let legacy = try JSONDecoder().decode(QuestionChoice.self, from: Data("\"Debug build\"".utf8))
         #expect(legacy.id.hasPrefix("legacy-"))
         #expect(legacy.label == "Debug build")
+        #expect(legacy.description == nil)
+    }
+
+    @Test("Question wire format defaults new presentation fields")
+    func questionWireCompatibility() throws {
+        let sessionID = SessionID(UUID())
+        let question = AgentQuestion(
+            id: QuestionID(UUID()),
+            sessionID: sessionID,
+            kind: .singleChoice,
+            header: "Scope",
+            prompt: "Choose",
+            choices: [QuestionChoice(id: "focused", label: "Focused")],
+            isOther: true
+        )
+        let roundTrip = try JSONDecoder().decode(AgentQuestion.self, from: JSONEncoder().encode(question))
+        #expect(roundTrip.header == "Scope")
+        #expect(roundTrip.isOther)
+
+        let encoded = try JSONEncoder().encode(question)
+        var legacy = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacy.removeValue(forKey: "header")
+        legacy.removeValue(forKey: "isOther")
+        let decoded = try JSONDecoder().decode(
+            AgentQuestion.self,
+            from: JSONSerialization.data(withJSONObject: legacy)
+        )
+        #expect(decoded.header == nil)
+        #expect(!decoded.isOther)
     }
 
     @Test("Action summaries and risk values are Codable")

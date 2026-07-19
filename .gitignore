@@ -1,6 +1,7 @@
 .DS_Store
 .build/
 DerivedData/
+yusufiwt.xcodeproj/
 AgentControl.xcodeproj/
 Config/Local.xcconfig
 .env
@@ -8,4 +9,3 @@ Config/Local.xcconfig
 *.p12
 *.key
 xcuserdata/
-

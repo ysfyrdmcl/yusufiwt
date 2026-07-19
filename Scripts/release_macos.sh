@@ -45,14 +45,14 @@ release_dir="$release_root/macos/$RELEASE_VERSION-$BUILD_NUMBER-$RELEASE_CHANNEL
 test ! -e "$release_dir" || { echo "release directory already exists: $release_dir" >&2; exit 1; }
 mkdir -p "$release_dir"
 
-archive_path="$release_dir/AgentControl.xcarchive"
+archive_path="$release_dir/yusufiwt.xcarchive"
 derived_data="$release_dir/DerivedData"
 export_dir="$release_dir/export"
 feed_dir="$release_dir/feed/$RELEASE_CHANNEL"
 mkdir -p "$export_dir" "$feed_dir"
 
 xcodegen generate --spec project.yml
-xcodebuild -project AgentControl.xcodeproj -scheme AgentControlMac -configuration Release \
+xcodebuild -project yusufiwt.xcodeproj -scheme AgentControlMac -configuration Release \
   -destination 'generic/platform=macOS' -derivedDataPath "$derived_data" \
   -archivePath "$archive_path" archive \
   MARKETING_VERSION="$RELEASE_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
@@ -63,8 +63,8 @@ xcodebuild -project AgentControl.xcodeproj -scheme AgentControlMac -configuratio
 xcodebuild -exportArchive -archivePath "$archive_path" -exportPath "$export_dir" \
   -exportOptionsPlist Config/ExportOptions/DeveloperID.plist
 
-app_path="$export_dir/AgentControl.app"
-test -d "$app_path" || { echo 'Developer ID export did not contain AgentControl.app' >&2; exit 1; }
+app_path="$export_dir/yusufiwt.app"
+test -d "$app_path" || { echo 'Developer ID export did not contain yusufiwt.app' >&2; exit 1; }
 
 notarization_required=1
 if test "${AGENTCONTROL_SKIP_NOTARIZATION:-0}" = 1; then
@@ -72,7 +72,7 @@ if test "${AGENTCONTROL_SKIP_NOTARIZATION:-0}" = 1; then
   : > "$release_dir/UNPUBLISHABLE-NOT-NOTARIZED"
 else
   require_env NOTARY_KEYCHAIN_PROFILE
-  initial_zip="$release_dir/AgentControl-notary.zip"
+  initial_zip="$release_dir/yusufiwt-notary.zip"
   /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$app_path" "$initial_zip"
   xcrun notarytool submit "$initial_zip" --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" \
     --wait --output-format json > "$release_dir/notary-app.json"
@@ -82,15 +82,15 @@ else
   rm "$initial_zip"
 fi
 
-zip_path="$release_dir/AgentControl-$RELEASE_VERSION-$BUILD_NUMBER.zip"
+zip_path="$release_dir/yusufiwt-$RELEASE_VERSION-$BUILD_NUMBER.zip"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$app_path" "$zip_path"
 
 dmg_stage="$release_dir/dmg-root"
 mkdir -p "$dmg_stage"
-/usr/bin/ditto "$app_path" "$dmg_stage/AgentControl.app"
+/usr/bin/ditto "$app_path" "$dmg_stage/yusufiwt.app"
 ln -s /Applications "$dmg_stage/Applications"
-dmg_path="$release_dir/AgentControl-$RELEASE_VERSION-$BUILD_NUMBER.dmg"
-hdiutil create -srcfolder "$dmg_stage" -volname "AgentControl $RELEASE_VERSION" -format UDZO "$dmg_path" >/dev/null
+dmg_path="$release_dir/yusufiwt-$RELEASE_VERSION-$BUILD_NUMBER.dmg"
+hdiutil create -srcfolder "$dmg_stage" -volname "yusufiwt $RELEASE_VERSION" -format UDZO "$dmg_path" >/dev/null
 rm "$dmg_stage/Applications"
 rm -r "$dmg_stage"
 
@@ -103,14 +103,14 @@ if test "$notarization_required" = 1; then
   xcrun stapler validate "$dmg_path"
 fi
 
-symbols_zip="$release_dir/AgentControl-$RELEASE_VERSION-$BUILD_NUMBER-dSYMs.zip"
+symbols_zip="$release_dir/yusufiwt-$RELEASE_VERSION-$BUILD_NUMBER-dSYMs.zip"
 /usr/bin/ditto -c -k --keepParent "$archive_path/dSYMs" "$symbols_zip"
-RELEASE_VERSION="$RELEASE_VERSION" ruby Scripts/generate_sbom.rb > "$release_dir/AgentControl-$RELEASE_VERSION-$BUILD_NUMBER.cdx.json"
+RELEASE_VERSION="$RELEASE_VERSION" ruby Scripts/generate_sbom.rb > "$release_dir/yusufiwt-$RELEASE_VERSION-$BUILD_NUMBER.cdx.json"
 
 /usr/bin/ditto "$zip_path" "$feed_dir/$(basename "$zip_path")"
 if test -n "${RELEASE_NOTES_FILE:-}"; then
   test -f "$RELEASE_NOTES_FILE" || { echo 'RELEASE_NOTES_FILE does not exist' >&2; exit 1; }
-  /usr/bin/ditto "$RELEASE_NOTES_FILE" "$feed_dir/AgentControl-$RELEASE_VERSION-$BUILD_NUMBER.md"
+  /usr/bin/ditto "$RELEASE_NOTES_FILE" "$feed_dir/yusufiwt-$RELEASE_VERSION-$BUILD_NUMBER.md"
 fi
 
 if test -n "${SPARKLE_BIN_DIR:-}"; then
@@ -145,14 +145,14 @@ checksums="$release_dir/SHA256SUMS"
   cd "$release_dir"
   /usr/bin/shasum -a 256 \
     "$(basename "$zip_path")" "$(basename "$dmg_path")" "$(basename "$symbols_zip")" \
-    "$(basename "$release_dir/AgentControl-$RELEASE_VERSION-$BUILD_NUMBER.cdx.json")" \
+    "$(basename "$release_dir/yusufiwt-$RELEASE_VERSION-$BUILD_NUMBER.cdx.json")" \
     "feed/$RELEASE_CHANNEL/appcast.xml" > "$(basename "$checksums")"
 )
 
 verifier_args=""
 test "$notarization_required" = 0 || verifier_args="--require-notarization"
 ruby Scripts/release_verifier.rb --app "$app_path" --dmg "$dmg_path" \
-  --sbom "$release_dir/AgentControl-$RELEASE_VERSION-$BUILD_NUMBER.cdx.json" \
+  --sbom "$release_dir/yusufiwt-$RELEASE_VERSION-$BUILD_NUMBER.cdx.json" \
   --checksums "$checksums" --dsyms "$archive_path/dSYMs" $verifier_args \
   --report "$release_dir/release-verifier.json"
 

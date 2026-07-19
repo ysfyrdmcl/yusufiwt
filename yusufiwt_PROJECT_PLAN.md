@@ -1,13 +1,15 @@
-# AgentControl — Native Swift AI Agent Operations Center
+# yusufiwt — Native Swift AI Agent Operations Center
 
 **Belge türü:** Baştan sona uygulama ve ürün planı  
 **Belge sürümü:** 1.0  
 **Karar tarihi:** 17 Temmuz 2026  
 **Hedef:** Codex'in ek ürün kararı veya kapsam yorumu yapmadan projeyi sıralı şekilde geliştirebilmesi  
-**Çalışma adı:** AgentControl  
+**Ürün adı:** yusufiwt  
 **Ana bundle öneki:** `com.yusuf.agentcontrol`
 
 > Bu belge proje için kaynak gerçektir. Codex; burada tanımlanmayan kritik bir davranışı sessizce varsaymamalı, mevcut mimari ilkelerle en güvenli ve en dar uygulamayı seçmeli, mimari sapmaları `Docs/ADR` altında kaydetmelidir. Her faz, testleri ve kabul kriterleri tamamlanmadan bitmiş sayılmaz.
+
+> **Release scope override — Mac Local V1:** İlk kurulabilir sürüm yalnızca hesapsız ve internetsiz macOS yerel üründür. iOS/watchOS, relay/APNs, pairing, Sparkle ve mağaza/notarization akışları silinmeden V2'ye ertelenmiştir. Geçerli kapsam ve kapılar için [`Docs/MAC_LOCAL_V1_SCOPE.md`](Docs/MAC_LOCAL_V1_SCOPE.md) ile [ADR 0022](Docs/ADR/0022-mac-local-v1-release-scope.md) önceliklidir.
 
 ---
 
@@ -15,7 +17,7 @@
 
 ## 1.1 Ürün vizyonu
 
-AgentControl; tek bir Mac'te çalışan Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek diğer yazılım agent'larını native macOS kontrol merkezinden izleyen, onay taleplerini yöneten, sorularını yanıtlayan, tamamlanma/başarısızlık durumlarını bildiren ve isteğe bağlı olarak iPhone ile Apple Watch üzerinden güvenli companion kararları verilmesini sağlayan bir **AI Agent Operations Center** olacaktır.
+yusufiwt; tek bir Mac'te çalışan Codex, Claude Code, Gemini CLI, OpenCode ve gelecekte eklenecek diğer yazılım agent'larını native macOS kontrol merkezinden izleyen, onay taleplerini yöneten, sorularını yanıtlayan, tamamlanma/başarısızlık durumlarını bildiren ve isteğe bağlı olarak iPhone ile Apple Watch üzerinden güvenli companion kararları verilmesini sağlayan bir **AI Agent Operations Center** olacaktır.
 
 Ürün yalnızca bir durum göstergesi olmayacaktır. Üç temel işi birlikte yapacaktır:
 
@@ -76,7 +78,7 @@ AgentControl; tek bir Mac'te çalışan Codex, Claude Code, Gemini CLI, OpenCode
 
 ### Kapsam sınırı — tek Mac
 
-- Agent'lar yalnızca AgentControl'ün kurulu olduğu tek yerel Mac'te çalışır.
+- Agent'lar yalnızca yusufiwt'in kurulu olduğu tek yerel Mac'te çalışır.
 - Başka Mac/Linux makineleri, SSH bootstrap, remote node ve uzaktan agent çalıştırma desteklenmez.
 - iPhone ve Apple Watch yalnızca bu yerel Mac'teki helper'a şifreli karar/bildirim companion'ı olarak bağlanır; agent çalıştırmaz ve ayrı bir execution node oluşturmaz.
 
@@ -483,7 +485,7 @@ UI, state management, analytics model veya networking için gereksiz üçüncü 
 # 3 — Proje ağacı (work tree)
 
 ```text
-AgentControl/
+yusufiwt/
 ├── README.md
 ├── LICENSE
 ├── CHANGELOG.md
@@ -920,7 +922,7 @@ Bu bölümde `P0` 1.0 için zorunlu, `P1` 1.0 tamamlayıcı, `P2` 1.1 ve sonras�
 
 - Temiz makinede kullanıcı bir agent için test event'ini görür.
 - Onboarding iptal edildiğinde yarım config kalmaz.
-- Uninstall işlemi yalnızca AgentControl tarafından eklenen blokları kaldırır.
+- Uninstall işlemi yalnızca yusufiwt tarafından eklenen blokları kaldırır.
 
 ## 4.2 Agent keşfi ve capability matrix — P0
 
@@ -1228,14 +1230,14 @@ Her entegrasyon ekranı:
 - Repair.
 - View managed changes.
 - Restore backup.
-- Uninstall AgentControl changes.
+- Uninstall yusufiwt changes.
 - Compatibility warning.
 
 Config güncellemesi öncesi/sonrası hash ve managed block ID tutulur. Kullanıcı config'i dışarıdan değiştirirse merge yapılır; bütün dosya geri yazılmaz.
 
 ## 4.16 Codex managed sessions — P0
 
-- AgentControl içinden repo/worktree ve başlangıç talimatı seçerek Codex session başlatma.
+- yusufiwt içinden repo/worktree ve başlangıç talimatı seçerek Codex session başlatma.
 - `codex app-server` process lifecycle helper tarafından yönetilir.
 - Thread/turn/item ağacı gerçek zamanlı gösterilir.
 - Command ve file change approval request'leri native Inbox'a gelir.
@@ -1299,7 +1301,7 @@ Notification category'leri:
 - `SESSION_LONG_RUNNING`: Open, Mute 1h.
 - `MAC_OFFLINE`: Open Mac Status.
 
-APNs payload açık metinde hassas komut taşımayacaktır. Notification Service Extension şifreli zarfı çözdükten sonra cihazda içerik üretir. Extension key'e ulaşamazsa genel “AgentControl'da yeni bir istek var” bildirimi gösterir.
+APNs payload açık metinde hassas komut taşımayacaktır. Notification Service Extension şifreli zarfı çözdükten sonra cihazda içerik üretir. Extension key'e ulaşamazsa genel “yusufiwt'te yeni bir istek var” bildirimi gösterir.
 
 ## 4.21 Live Activity ve widgets — P1/P2
 
@@ -2519,7 +2521,7 @@ Gerçek agent entegrasyonundan önce uçtan uca event ve decision akışını ka
 
 ### Kabul kriterleri
 
-- AgentControl içinden başlatılan Codex session gerçek zamanlı izlenir.
+- yusufiwt içinden başlatılan Codex session gerçek zamanlı izlenir.
 - Command ve file approval güvenli biçimde onay/red olur.
 - UI provider ack öncesi applied göstermez.
 - Experimental WebSocket transport production path'inde yoktur.
@@ -2657,7 +2659,7 @@ Bildirimden doğru çalışma bağlamına dönmeyi ve güvenli kurulumu tamamlam
 - Başarısız exact jump doğru fallback seviyesini gösteriyor.
 - İzin yokken crash veya tekrarlayan sistem prompt'u yok.
 - Onboarding yarıda kesilince config bozulmuyor.
-- Uninstall yalnızca AgentControl değişikliklerini kaldırıyor.
+- Uninstall yalnızca yusufiwt değişikliklerini kaldırıyor.
 
 ## Faz 11 — Remote node ve SSH (kapsamdan çıkarıldı)
 

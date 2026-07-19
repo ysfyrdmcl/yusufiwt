@@ -18,7 +18,7 @@ outside this phase.
 ## Build checks
 
 - `swift test` builds the root package with Swift 6 complete concurrency checking.
-- XcodeGen emits `AgentControl.xcodeproj` without manual edits.
+- XcodeGen emits `yusufiwt.xcodeproj` without manual edits.
 - Every generated shell target builds for an available generic destination with code signing disabled.
 
 ## Commands
@@ -28,4 +28,3 @@ The acceptance command is:
 ```sh
 make bootstrap && make generate && make test
 ```
-

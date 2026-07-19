@@ -68,7 +68,7 @@ public actor CodexManagedSessionController {
         return .request(id: id, method: "initialize", params: .object([
             "clientInfo": .object([
                 "name": .string("agentcontrol"),
-                "title": .string("AgentControl"),
+                "title": .string("yusufiwt"),
                 "version": .string(clientVersion)
             ]),
             "capabilities": .object([

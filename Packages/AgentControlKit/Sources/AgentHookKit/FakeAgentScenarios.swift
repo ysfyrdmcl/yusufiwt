@@ -73,7 +73,7 @@
                     timeout: decisionTimeoutMilliseconds
                 ))]
             case .subagent:
-                [.emit(subagent(sequence: 1))]
+                [.emit(state(.running, sequence: 1)), .emit(subagent(sequence: 1))]
             case .completion, .failure:
                 terminalSteps(for: scenario)
             case .malformed:

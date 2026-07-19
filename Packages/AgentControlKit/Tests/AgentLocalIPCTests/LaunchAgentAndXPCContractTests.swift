@@ -35,6 +35,25 @@ struct LaunchAgentAndXPCContractTests {
         server.stop()
     }
 
+    @Test("LaunchAgent repair refreshes registration without deleting queued events")
+    func repairRegistration() async throws {
+        let paths = try temporaryPaths()
+        try paths.prepare()
+        let server = UnixSocketServer(socketURL: paths.socketURL) { _ in .neutral(reason: .helperUnavailable) }
+        try server.start()
+        let queuedEvent = paths.spoolDirectory.appendingPathComponent("event.json")
+        try Data("queued".utf8).write(to: queuedEvent)
+        let service = LaunchAgentServiceFixture(state: .enabled)
+        let manager = LaunchAgentManager(service: service, paths: paths)
+
+        #expect(try await manager.repairRegistration() == .enabled)
+        #expect(!FileManager.default.fileExists(atPath: paths.socketURL.path))
+        #expect(FileManager.default.fileExists(atPath: queuedEvent.path))
+        #expect(await service.unregisterCount == 1)
+        #expect(await service.registerCount == 1)
+        server.stop()
+    }
+
     @Test("XPC secure wrapper rejects oversized data and round trips requests")
     func secureCodingWrapper() throws {
         let message = try XPCMessage(request: .negotiate(supportedVersions: [1]))
@@ -74,6 +93,7 @@ private final class LaunchAgentServiceFixture: LaunchAgentServicing, @unchecked 
     private let lock = NSLock()
     private var storedState: LaunchAgentState
     private var storedUnregisterCount = 0
+    private var storedRegisterCount = 0
 
     init(state: LaunchAgentState) {
         storedState = state
@@ -87,8 +107,15 @@ private final class LaunchAgentServiceFixture: LaunchAgentServicing, @unchecked 
         get async { lock.withLock { storedUnregisterCount } }
     }
 
+    var registerCount: Int {
+        get async { lock.withLock { storedRegisterCount } }
+    }
+
     func register() throws {
-        lock.withLock { storedState = .enabled }
+        lock.withLock {
+            storedRegisterCount += 1
+            storedState = .enabled
+        }
     }
 
     func unregister() async throws {

@@ -40,12 +40,14 @@
     @MainActor
     public final class MacNotificationCoordinator: NSObject, UNUserNotificationCenterDelegate {
         public var responseHandler: (@MainActor @Sendable (MacNotificationResponse) -> Void)?
+        public var reviewHandler: (@MainActor @Sendable () -> Void)?
         public private(set) var authorizationState: NotificationAuthorizationState = .unknown
 
         private let center: UNUserNotificationCenter
         private var preferences: MacNotificationPreferences
         private var deduplicator = NotificationDeduplicator()
         private var deliveredAlertIDs: Set<String> = []
+        private var usesNotchSurface = false
 
         public init(
             center: UNUserNotificationCenter = .current(),
@@ -72,8 +74,15 @@
             preferences = value
         }
 
+        public func setUsesNotchSurface(_ enabled: Bool) {
+            usesNotchSurface = enabled
+        }
+
         public func reconcile(_ decisions: [PendingHookDecision], now: Date = Date()) async {
-            guard authorizationState != .denied else {
+            guard !usesNotchSurface,
+                  authorizationState != .denied,
+                  preferences.decisionNotificationsEnabled
+            else {
                 return
             }
             deduplicator.reconcile(active: decisions)
@@ -89,8 +98,10 @@
                 let policy = MacNotificationPolicy.delivery(preferences: preferences, at: now)
                 guard policy != .suppress else { continue }
                 let content = UNMutableNotificationContent()
-                content.title = decision.projectName ?? "AgentControl"
-                content.body = Self.body(for: decision)
+                content.title = preferences.privacyLevel == .projectAndEvent
+                    ? decision.projectName ?? "yusufiwt"
+                    : "yusufiwt"
+                content.body = Self.body(for: decision, privacyLevel: preferences.privacyLevel)
                 content.categoryIdentifier = Self.category(for: decision).rawValue
                 content.threadIdentifier = decision.sessionID.description
                 content.userInfo = [
@@ -110,7 +121,10 @@
         }
 
         public func reconcile(_ alerts: [SessionAlert], now: Date = Date()) async {
-            guard authorizationState != .denied else { return }
+            guard !usesNotchSurface,
+                  authorizationState != .denied,
+                  preferences.longRunningIdleNotificationsEnabled
+            else { return }
             let activeIDs = Set(alerts.map(\.id))
             deliveredAlertIDs.formIntersection(activeIDs)
             let policy = MacNotificationPolicy.delivery(preferences: preferences, at: now)
@@ -119,7 +133,7 @@
             }
             for alert in alerts where deliveredAlertIDs.insert(alert.id).inserted {
                 let content = UNMutableNotificationContent()
-                content.title = "AgentControl"
+                content.title = "yusufiwt"
                 content.body = "\(alert.kind.rawValue): \(Int(alert.observedDurationSeconds / 60)) min"
                 content.categoryIdentifier = MacNotificationCategory.alert.rawValue
                 content.threadIdentifier = alert.sessionID.description
@@ -133,14 +147,63 @@
             }
         }
 
+        public func reconcile(
+            _ event: RegistryNotification,
+            projectName: String? = nil,
+            now: Date = Date()
+        ) async {
+            guard !usesNotchSurface, authorizationState != .denied else { return }
+            let enabled: Bool
+            let body: String
+            switch event.state {
+            case .completed:
+                enabled = preferences.completedNotificationsEnabled
+                body = "Session completed."
+            case .failed:
+                enabled = preferences.failedNotificationsEnabled
+                body = "Session failed."
+            case .waitingInput:
+                enabled = preferences.decisionNotificationsEnabled
+                body = "Session is waiting for input."
+            case .waitingApproval:
+                enabled = preferences.decisionNotificationsEnabled
+                body = "Session is waiting for approval."
+            default:
+                return
+            }
+            guard enabled else { return }
+            let policy = MacNotificationPolicy.delivery(preferences: preferences, at: now)
+            guard policy != .suppress else { return }
+            let content = UNMutableNotificationContent()
+            content.title = preferences.privacyLevel == .projectAndEvent ? projectName ?? "yusufiwt" : "yusufiwt"
+            content.body = body
+            content.categoryIdentifier = MacNotificationCategory.alert.rawValue
+            content.threadIdentifier = event.sessionID.description
+            if policy == .deliverWithSound {
+                content.sound = .default
+            }
+            try? await center.add(UNNotificationRequest(
+                identifier: "agentcontrol.session.\(event.eventID.description).\(event.snapshotRevision)",
+                content: content,
+                trigger: nil
+            ))
+        }
+
         public nonisolated func userNotificationCenter(
             _: UNUserNotificationCenter,
             didReceive response: UNNotificationResponse,
             withCompletionHandler completionHandler: @escaping () -> Void
         ) {
             defer { completionHandler() }
-            guard let action = MacNotificationAction(rawValue: response.actionIdentifier),
-                  let request = response.notification.request.content.userInfo["requestID"] as? String,
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+                Task { @MainActor [weak self] in self?.reviewHandler?() }
+                return
+            }
+            guard let action = MacNotificationAction(rawValue: response.actionIdentifier) else { return }
+            if action == .review {
+                Task { @MainActor [weak self] in self?.reviewHandler?() }
+            }
+            guard let request = response.notification.request.content.userInfo["requestID"] as? String,
                   let requestID = UUID(uuidString: request)
             else { return }
             let rawRevision = response.notification.request.content.userInfo["revision"]
@@ -204,11 +267,25 @@
             }
         }
 
-        private static func body(for decision: PendingHookDecision) -> String {
+        private static func body(
+            for decision: PendingHookDecision,
+            privacyLevel: NotificationPrivacyLevel
+        ) -> String {
             if DecisionAvailability.evaluate(decision) == .secretRequiresTerminal {
                 return "A secret answer is required in the terminal."
             }
-            return decision.prompt
+            guard privacyLevel == .projectAndEvent else {
+                return switch decision.kind {
+                case .approval: "An agent approval needs review."
+                case .question: "An agent question needs an answer."
+                case .plan: "An agent plan needs review."
+                }
+            }
+            return switch decision.kind {
+            case .approval: "Approval requested."
+            case .question: "Question asked."
+            case .plan: "Plan ready for review."
+            }
         }
     }
 #endif

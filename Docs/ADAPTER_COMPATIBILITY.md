@@ -13,5 +13,5 @@ These major ranges are covered by normalized fixtures and contract tests. A new
 major is never assumed compatible: decision controls are hidden until a fixture
 and matrix update ship. Generic hooks are always monitor-only.
 
-Local-only macOS use requires no AgentControl account. Sign-in is only for the
+Local-only macOS use requires no yusufiwt account. Sign-in is only for the
 optional iPhone/watch relay companion.

@@ -9,6 +9,7 @@ let package = Package(
         .library(name: "AgentProtocol", targets: ["AgentProtocol"]),
         .library(name: "AgentPersistence", targets: ["AgentPersistence"]),
         .library(name: "AgentLocalIPC", targets: ["AgentLocalIPC"]),
+        .library(name: "AgentCompanionAuthority", targets: ["AgentCompanionAuthority"]),
         .library(name: "AgentHookKit", targets: ["AgentHookKit"]),
         .library(name: "AgentCodexAdapter", targets: ["AgentCodexAdapter"]),
         .library(name: "AgentCompanion", targets: ["AgentCompanion"]),
@@ -21,8 +22,13 @@ let package = Package(
         .target(name: "AgentPersistence", dependencies: ["AgentDomain", "AgentProtocol"], linkerSettings: [.linkedLibrary("sqlite3")]),
         .target(
             name: "AgentLocalIPC",
-            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence", "AgentCompanion"],
+            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence"],
             linkerSettings: [.linkedFramework("Security"), .linkedFramework("ServiceManagement")]
+        ),
+        .target(
+            name: "AgentCompanionAuthority",
+            dependencies: ["AgentDomain", "AgentCompanion"],
+            path: "Sources/AgentCompanionAuthority"
         ),
         .target(name: "AgentHookKit", dependencies: ["AgentDomain", "AgentProtocol", "AgentLocalIPC"]),
         .target(name: "AgentCodexAdapter", dependencies: ["AgentDomain", "AgentProtocol"]),

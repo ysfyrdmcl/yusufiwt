@@ -45,6 +45,7 @@ struct PerformanceFixtureTests {
             from: start.addingTimeInterval(-1), endDate: start.addingTimeInterval(1)
         ))
         let queryDuration = Date().timeIntervalSince(queryStarted)
+        print(String(format: "100k ingestion: %.3f s; analytics query: %.3f s", ingestionDuration, queryDuration))
         #expect(summary.totalSessions == 100)
         #expect(ingestionDuration < 120, "100-session/100k-event ingestion exceeded the 120-second release budget")
         #expect(queryDuration < 2.0, "100k analytics query exceeded the two-second release-test budget")

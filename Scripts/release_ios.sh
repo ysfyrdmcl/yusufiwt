@@ -30,7 +30,7 @@ release_dir="$release_root/ios/$RELEASE_VERSION-$BUILD_NUMBER"
 test ! -e "$release_dir" || { echo "release directory already exists: $release_dir" >&2; exit 1; }
 mkdir -p "$release_dir"
 
-archive_path="$release_dir/AgentControl-iOS.xcarchive"
+archive_path="$release_dir/yusufiwt-iOS.xcarchive"
 derived_data="$release_dir/DerivedData"
 export_dir="$release_dir/export"
 mkdir -p "$export_dir"
@@ -42,7 +42,7 @@ archive_build() {
     require_env ASC_KEY_PATH
     require_env ASC_KEY_ID
     require_env ASC_ISSUER_ID
-    xcodebuild -project AgentControl.xcodeproj -scheme AgentControliOS -configuration Release \
+    xcodebuild -project yusufiwt.xcodeproj -scheme AgentControliOS -configuration Release \
       -destination 'generic/platform=iOS' -derivedDataPath "$derived_data" \
       -archivePath "$archive_path" archive -allowProvisioningUpdates \
       -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" \
@@ -50,7 +50,7 @@ archive_build() {
       MARKETING_VERSION="$RELEASE_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
       DEVELOPMENT_TEAM="$AGENTCONTROL_TEAM_ID"
   else
-    xcodebuild -project AgentControl.xcodeproj -scheme AgentControliOS -configuration Release \
+    xcodebuild -project yusufiwt.xcodeproj -scheme AgentControliOS -configuration Release \
       -destination 'generic/platform=iOS' -derivedDataPath "$derived_data" \
       -archivePath "$archive_path" archive -allowProvisioningUpdates \
       MARKETING_VERSION="$RELEASE_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
@@ -77,9 +77,9 @@ else
     -exportOptionsPlist "$export_options" -allowProvisioningUpdates
 fi
 
-symbols_zip="$release_dir/AgentControl-iOS-$RELEASE_VERSION-$BUILD_NUMBER-dSYMs.zip"
+symbols_zip="$release_dir/yusufiwt-iOS-$RELEASE_VERSION-$BUILD_NUMBER-dSYMs.zip"
 /usr/bin/ditto -c -k --keepParent "$archive_path/dSYMs" "$symbols_zip"
-sbom="$release_dir/AgentControl-iOS-$RELEASE_VERSION-$BUILD_NUMBER.cdx.json"
+sbom="$release_dir/yusufiwt-iOS-$RELEASE_VERSION-$BUILD_NUMBER.cdx.json"
 RELEASE_VERSION="$RELEASE_VERSION" ruby Scripts/generate_sbom.rb > "$sbom"
 
 checksums="$release_dir/SHA256SUMS"

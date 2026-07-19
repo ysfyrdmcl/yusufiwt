@@ -99,7 +99,7 @@ class ReleaseVerifier
 
   def ios_archive!(archive_path:)
     archive = Pathname(archive_path).expand_path
-    app = archive.join("Products/Applications/AgentControl.app")
+    app = archive.join("Products/Applications/yusufiwt.app")
     assert(app.directory?, "iOS application exists in archive")
     info = plist_json(app.join("Info.plist"))
     assert(info.fetch("CFBundleIdentifier") == "com.yusuf.agentcontrol.ios", "iOS bundle identifier matches")
@@ -137,7 +137,7 @@ class ReleaseVerifier
     assert(dsym.exist?, "dSYM artifact exists")
     return unless dsym.directory?
 
-    app_uuids = run!("/usr/bin/dwarfdump", "--uuid", app.join("Contents/MacOS/AgentControl").to_s).lines.map { |line| line.split[1] }.compact
+    app_uuids = run!("/usr/bin/dwarfdump", "--uuid", app.join("Contents/MacOS/yusufiwt").to_s).lines.map { |line| line.split[1] }.compact
     dsym_uuids = Dir[dsym.join("**/Contents/Resources/DWARF/*")].flat_map do |binary|
       run!("/usr/bin/dwarfdump", "--uuid", binary).lines.map { |line| line.split[1] }.compact
     end

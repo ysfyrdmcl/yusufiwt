@@ -22,6 +22,12 @@ private struct WatchDashboard: View {
 
     var body: some View {
         List {
+            HStack(spacing: 6) {
+                YusufiwtBrandGlyph(size: 18)
+                Text("yusufiwt").font(.headline)
+                Spacer()
+            }
+            .listRowBackground(Color.clear)
             if let request = model.snapshot?.watch.highestPriorityRequest {
                 Section(String(localized: "Needs attention")) {
                     NavigationLink {
@@ -52,7 +58,7 @@ private struct WatchDashboard: View {
                 }
             }
         }
-        .navigationTitle("AgentControl")
+        .navigationTitle("yusufiwt")
         .overlay(alignment: .bottom) {
             if let status = model.status {
                 Text(status).font(.caption2).padding(5).background(.ultraThinMaterial, in: Capsule())
@@ -125,11 +131,11 @@ private final class WatchCompanionModel: NSObject, ObservableObject, WCSessionDe
     func openOnIPhone(_ card: WatchRequestCard) {
         let url = "agentcontrol://inbox/\(card.id.uuidString.lowercased())"
         guard WCSession.default.isReachable else {
-            status = String(localized: "Open AgentControl on iPhone")
+            status = String(localized: "Open yusufiwt on iPhone")
             return
         }
         WCSession.default.sendMessage(["open_iPhone": url], replyHandler: nil) { [weak self] _ in
-            Task { @MainActor in self?.status = String(localized: "Open AgentControl on iPhone") }
+            Task { @MainActor in self?.status = String(localized: "Open yusufiwt on iPhone") }
         }
         status = String(localized: "Continue on iPhone")
     }
@@ -148,14 +154,24 @@ private final class WatchCompanionModel: NSObject, ObservableObject, WCSessionDe
         }
     }
 
+    #if os(iOS)
+    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
+
+    nonisolated func sessionDidDeactivate(_ session: WCSession) {}
+    #endif
+
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        Task { @MainActor [weak self] in self?.ingest(applicationContext) }
+        guard let data = applicationContext[WatchMessageCodec.snapshotKey] as? Data else { return }
+        Task { @MainActor [weak self] in self?.ingest(data) }
     }
 
     private func ingest(_ context: [String: Any]) {
-        guard let data = context[WatchMessageCodec.snapshotKey] as? Data,
-              let value = try? CompanionSurfaceSnapshot.decode(data)
-        else { return }
+        guard let data = context[WatchMessageCodec.snapshotKey] as? Data else { return }
+        ingest(data)
+    }
+
+    private func ingest(_ data: Data) {
+        guard let value = try? CompanionSurfaceSnapshot.decode(data) else { return }
         snapshot = value
         status = nil
     }

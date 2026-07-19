@@ -151,6 +151,27 @@ struct AgentMacUITests {
         #expect(revisedDelivery)
     }
 
+    @Test("Mac notification preferences persist every local policy switch")
+    func notificationPreferencePersistence() throws {
+        let suiteName = "AgentMacUITests.notifications.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = MacNotificationPreferencesStore(defaults: defaults)
+        let value = MacNotificationPreferences(
+            enabled: false,
+            soundEnabled: false,
+            decisionNotificationsEnabled: false,
+            completedNotificationsEnabled: true,
+            failedNotificationsEnabled: false,
+            longRunningIdleNotificationsEnabled: false,
+            focusAware: false,
+            quietHours: QuietHours(startMinute: 1320, endMinute: 420),
+            privacyLevel: .projectAndEvent
+        )
+        store.save(value)
+        #expect(store.load() == value)
+    }
+
     @Test("Approval presentation exposes parsed command and risk reasons")
     func approvalPresentation() {
         let pending = PendingHookDecision(request: Self.decisionRequest())
@@ -205,6 +226,7 @@ struct AgentMacUITests {
                 projectName: "Project \(index)",
                 adapterID: AdapterID(index.isMultiple(of: 2) ? "codex" : "claude"),
                 state: .running,
+                startedAt: Date(timeIntervalSince1970: 1_699_999_000 + Double(index)),
                 lastMeaningfulEventAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(index)),
                 snapshotRevision: Int64(index)
             )

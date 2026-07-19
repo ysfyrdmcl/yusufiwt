@@ -103,8 +103,8 @@ public struct HTTPAPNSProvider: PushNotificationProviding {
                         mutableContent: 1,
                         category: category,
                         alert: .init(
-                            title: "AgentControl",
-                            body: "Open AgentControl to review a new agent event."
+                            title: "yusufiwt",
+                            body: "Open yusufiwt to review a new agent event."
                         ),
                         sound: "default"
                     ),

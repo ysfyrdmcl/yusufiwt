@@ -4,8 +4,8 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
 
-test -d AgentControl.xcodeproj
-test -f AgentControl.xcodeproj/project.pbxproj
+test -d yusufiwt.xcodeproj
+test -f yusufiwt.xcodeproj/project.pbxproj
 
 for catalog in Apps/macOS/Resources/Localizable.xcstrings Apps/iOS/Resources/Localizable.xcstrings; do
   grep -q '"en"' "$catalog"

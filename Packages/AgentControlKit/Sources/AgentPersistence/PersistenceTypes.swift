@@ -72,6 +72,7 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
     public let projectName: String
     public let adapterID: AdapterID
     public let state: SessionState
+    public let startedAt: Date
     public let lastMeaningfulEventAt: Date
     public let snapshotRevision: Int64
 
@@ -80,6 +81,7 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
         projectName: String,
         adapterID: AdapterID,
         state: SessionState,
+        startedAt: Date,
         lastMeaningfulEventAt: Date,
         snapshotRevision: Int64
     ) {
@@ -87,8 +89,24 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
         self.projectName = projectName
         self.adapterID = adapterID
         self.state = state
+        self.startedAt = startedAt
         self.lastMeaningfulEventAt = lastMeaningfulEventAt
         self.snapshotRevision = snapshotRevision
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, projectName, adapterID, state, startedAt, lastMeaningfulEventAt, snapshotRevision
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(SessionID.self, forKey: .id)
+        projectName = try container.decode(String.self, forKey: .projectName)
+        adapterID = try container.decode(AdapterID.self, forKey: .adapterID)
+        state = try container.decode(SessionState.self, forKey: .state)
+        lastMeaningfulEventAt = try container.decode(Date.self, forKey: .lastMeaningfulEventAt)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt) ?? lastMeaningfulEventAt
+        snapshotRevision = try container.decode(Int64.self, forKey: .snapshotRevision)
     }
 }
 

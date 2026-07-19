@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "AgentControlRelay",
+    name: "yusufiwtRelay",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "AgentControlRelay", targets: ["AgentControlRelay"]),

@@ -51,12 +51,24 @@ enum FakeAgentSimulatorMain {
 
     private static func parseDecision(_ value: String) -> HookDecision? {
         switch value {
-        case "approve": HookDecision.approve
-        case "deny": HookDecision.deny
+        case "approve": return HookDecision.approve
+        case "deny": return HookDecision.deny
+        case "confirm:true": return HookDecision.confirm(true)
+        case "confirm:false": return HookDecision.confirm(false)
         default:
-            value.hasPrefix("answer:")
-                ? HookDecision.answerText(String(value.dropFirst("answer:".count)))
-                : nil
+            if value.hasPrefix("answer:") {
+                return HookDecision.answerText(String(value.dropFirst("answer:".count)))
+            }
+            if value.hasPrefix("choice:") {
+                return HookDecision.answerChoice(id: String(value.dropFirst("choice:".count)))
+            }
+            if value.hasPrefix("choices:") {
+                return HookDecision.answerChoices(ids: value.dropFirst("choices:".count).split(separator: ",").map(String.init))
+            }
+            if value.hasPrefix("changes:") {
+                return HookDecision.requestPlanChanges(String(value.dropFirst("changes:".count)))
+            }
+            return nil
         }
     }
 
@@ -86,6 +98,6 @@ private enum SimulatorError: Error, CustomStringConvertible {
     case usage
 
     var description: String {
-        "usage: fake-agent-simulator <\(FakeAgentScenario.allCases.map(\.rawValue).joined(separator: "|"))> [--timeout-ms N] [--auto-decision approve|deny|answer:TEXT]"
+        "usage: fake-agent-simulator <\(FakeAgentScenario.allCases.map(\.rawValue).joined(separator: "|"))> [--timeout-ms N] [--auto-decision approve|deny|answer:TEXT|choice:ID|choices:ID,ID|confirm:true|confirm:false|changes:TEXT]"
     }
 }

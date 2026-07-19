@@ -1,6 +1,6 @@
-# AgentControl 1.0 beta release notes
+# yusufiwt 1.0 beta release notes
 
-AgentControl is a native, local-first operations center for Codex, Claude Code,
+yusufiwt is a native, local-first operations center for Codex, Claude Code,
 Gemini CLI, and generic monitoring hooks. The beta includes the macOS menu bar,
 floating panel, dashboard/inbox, provider-authoritative approvals, local rules
 and diagnostics, and an optional end-to-end encrypted iPhone/watch companion.

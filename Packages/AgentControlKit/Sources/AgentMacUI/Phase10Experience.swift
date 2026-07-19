@@ -73,8 +73,9 @@
         }
 
         public func setMode(_ mode: AgentControlWorkingMode) {
-            workingMode = mode
-            defaults.set(mode.rawValue, forKey: Keys.mode)
+            _ = mode
+            workingMode = .localOnly
+            defaults.set(AgentControlWorkingMode.localOnly.rawValue, forKey: Keys.mode)
         }
 
         public func configureCoreServices() async {
@@ -241,7 +242,7 @@
             let nodeID = NodeID(UUID())
             let project = ProjectReference(
                 id: ProjectID(UUID()),
-                name: "AgentControl Test",
+                name: "yusufiwt Test",
                 rootURL: URL(fileURLWithPath: "/private/tmp", isDirectory: true)
             )
             let session = AgentSession(

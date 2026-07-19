@@ -170,7 +170,7 @@
             }
             block += "[[hooks.\(hook.event).hooks]]\n"
             block += "type = \"command\"\ncommand = \(tomlString(hook.command))\n"
-            block += "timeout = \(hook.timeoutSeconds)\nstatusMessage = \"AgentControl [\(hook.marker)]\"\n"
+            block += "timeout = \(hook.timeoutSeconds)\nstatusMessage = \"yusufiwt [\(hook.marker)]\"\n"
             block += "# agentcontrol:end \(hook.marker)\n"
             let separator = content.isEmpty || content.hasSuffix("\n") ? "" : "\n"
             return content + separator + block
@@ -451,10 +451,26 @@
 
     private enum JSONTextPatcher {
         static func upsert(_ hook: HookCommandDefinition, in content: String) throws -> String {
-            guard !content.contains(hook.marker) else { return content }
             var bytes = Array(content.utf8)
             guard let root = JSONScanner.rootObject(in: bytes) else { throw ManagedConfigError.unsupportedRoot }
             let group = makeGroup(hook)
+            if content.contains(hook.marker) {
+                guard let hooks = JSONScanner.property("hooks", inObject: root, bytes: bytes),
+                      bytes[hooks.lowerBound] == ascii("{"),
+                      let eventArray = JSONScanner.property(
+                          hook.event,
+                          inObject: hooks.lowerBound ..< hooks.upperBound,
+                          bytes: bytes
+                      ),
+                      bytes[eventArray.lowerBound] == ascii("["),
+                      let ownedEntry = JSONScanner.arrayElements(in: eventArray, bytes: bytes).first(where: {
+                          (String(bytes: bytes[$0], encoding: .utf8) ?? "").contains(hook.marker)
+                      })
+                else { throw ManagedConfigError.managedEntryConflict(hook.marker) }
+                guard String(bytes: bytes[ownedEntry], encoding: .utf8) != group else { return content }
+                bytes.replaceSubrange(ownedEntry, with: group.utf8)
+                return String(bytes: bytes, encoding: .utf8) ?? ""
+            }
             if let hooksValue = JSONScanner.property("hooks", inObject: root, bytes: bytes) {
                 guard bytes[hooksValue.lowerBound] == ascii("{") else { throw ManagedConfigError.managedEntryConflict("hooks") }
                 let hooksObject = hooksValue.lowerBound ..< hooksValue.upperBound
@@ -516,7 +532,7 @@
             if hook.usesNameField {
                 group += "\"name\":\"\(escape(hook.marker))\""
             } else {
-                group += "\"statusMessage\":\"AgentControl [\(escape(hook.marker))]\""
+                group += "\"statusMessage\":\"yusufiwt [\(escape(hook.marker))]\""
             }
             return group + "}]}"
         }

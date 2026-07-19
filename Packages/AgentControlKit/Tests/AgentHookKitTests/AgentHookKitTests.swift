@@ -206,6 +206,9 @@ struct AgentHookKitTests {
         }
         durations.sort()
         let p95 = durations[Int(Double(durations.count - 1) * 0.95)]
+        let p95Milliseconds = Double(p95.components.seconds) * 1000
+            + Double(p95.components.attoseconds) / 1_000_000_000_000_000
+        print(String(format: "local event -> helper p95: %.2f ms (n=%d)", p95Milliseconds, durations.count))
         #expect(p95 < .milliseconds(500))
         await stack.runtime.gracefulShutdown()
     }

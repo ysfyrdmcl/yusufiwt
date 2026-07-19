@@ -24,6 +24,19 @@ struct DatabaseActorTests {
         #expect(!events[0].wasEncrypted)
     }
 
+    @Test("Different provider project IDs for one repository reuse the canonical project row")
+    func canonicalProjectByPath() async throws {
+        let database = try DatabaseActor(configuration: .inMemory)
+        let first = try Fixture()
+        let second = try Fixture(randomized: true)
+
+        #expect(try await database.append(first.write(sequence: 1, revision: 1, state: .running)) == .appended)
+        #expect(try await database.append(second.write(sequence: 1, revision: 1, state: .running)) == .appended)
+        #expect(try await database.eventCount() == 2)
+        #expect(try await database.session(id: first.sessionID) != nil)
+        #expect(try await database.session(id: second.sessionID) != nil)
+    }
+
     @Test("A failed batch rolls back every event and snapshot")
     func transactionRollback() async throws {
         let database = try DatabaseActor(configuration: .inMemory)
@@ -209,7 +222,14 @@ private struct Fixture: Sendable {
     let baseEventID: EventID
     let date = Date(timeIntervalSince1970: 1_700_000_000)
 
-    init() throws {
+    init(randomized: Bool = false) throws {
+        if randomized {
+            nodeID = NodeID(UUID())
+            projectID = ProjectID(UUID())
+            sessionID = SessionID(UUID())
+            baseEventID = EventID(UUID())
+            return
+        }
         nodeID = try NodeID(#require(UUID(uuidString: "11111111-1111-1111-1111-111111111111")))
         projectID = try ProjectID(#require(UUID(uuidString: "22222222-2222-2222-2222-222222222222")))
         sessionID = try SessionID(#require(UUID(uuidString: "33333333-3333-3333-3333-333333333333")))

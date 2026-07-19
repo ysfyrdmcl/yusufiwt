@@ -2,13 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "AgentControl",
+    name: "yusufiwt",
     platforms: [.macOS(.v14), .iOS(.v17), .watchOS(.v10)],
     products: [
         .library(name: "AgentDomain", targets: ["AgentDomain"]),
         .library(name: "AgentProtocol", targets: ["AgentProtocol"]),
         .library(name: "AgentPersistence", targets: ["AgentPersistence"]),
         .library(name: "AgentLocalIPC", targets: ["AgentLocalIPC"]),
+        .library(name: "AgentCompanionAuthority", targets: ["AgentCompanionAuthority"]),
         .library(name: "AgentHookKit", targets: ["AgentHookKit"]),
         .library(name: "AgentCodexAdapter", targets: ["AgentCodexAdapter"]),
         .library(name: "AgentCompanion", targets: ["AgentCompanion"]),
@@ -42,9 +43,14 @@ let package = Package(
         ),
         .target(
             name: "AgentLocalIPC",
-            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence", "AgentCompanion"],
+            dependencies: ["AgentDomain", "AgentProtocol", "AgentPersistence"],
             path: "Packages/AgentControlKit/Sources/AgentLocalIPC",
             linkerSettings: [.linkedFramework("Security"), .linkedFramework("ServiceManagement")]
+        ),
+        .target(
+            name: "AgentCompanionAuthority",
+            dependencies: ["AgentDomain", "AgentCompanion"],
+            path: "Packages/AgentControlKit/Sources/AgentCompanionAuthority"
         ),
         .target(
             name: "AgentHookKit",

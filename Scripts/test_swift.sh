@@ -13,7 +13,7 @@ swift test --quiet --enable-code-coverage --disable-sandbox \
   --security-path .build/security \
   --scratch-path .build
 
-coverage_path=$(find .build -path '*/debug/codecov/AgentControl.json' -type f -print -quit)
+coverage_path=$(find .build -path '*/debug/codecov/yusufiwt.json' -type f -print -quit)
 if [ -z "$coverage_path" ]; then
   echo 'Swift coverage report is missing' >&2
   exit 1

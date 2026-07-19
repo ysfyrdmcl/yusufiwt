@@ -60,7 +60,6 @@ successful fixture result.
 ## Public notification and Focus boundary
 
 AgentControl registers public UserNotifications categories and interruption
-levels. macOS applies the user's Focus settings; AgentControl does not inspect,
-simulate, or bypass system Focus. AgentControl quiet hours are a separate local
+levels. macOS applies the user's Focus settings; yusufiwt does not inspect,
+simulate, or bypass system Focus. yusufiwt quiet hours are a separate local
 policy tested with an injected clock.
-

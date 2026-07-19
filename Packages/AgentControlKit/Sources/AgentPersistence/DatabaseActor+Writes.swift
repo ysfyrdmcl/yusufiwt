@@ -6,9 +6,13 @@ import Foundation
 extension DatabaseActor {
     func upsertSupportRows(for write: EventWrite, connection: SQLiteConnection) throws {
         try upsertNode(for: write, connection: connection)
-        try upsertProject(write.snapshot.project, startedAt: write.snapshot.startedAt, connection: connection)
+        let projectID = try upsertProject(
+            write.snapshot.project,
+            startedAt: write.snapshot.startedAt,
+            connection: connection
+        )
         let terminalID = try upsertTerminal(for: write.snapshot, connection: connection)
-        try upsertSession(for: write, terminalID: terminalID, connection: connection)
+        try upsertSession(for: write, projectID: projectID, terminalID: terminalID, connection: connection)
     }
 
     func insertEvent(_ envelope: EventEnvelope, connection: SQLiteConnection) throws {
@@ -54,19 +58,63 @@ extension DatabaseActor {
         _ project: ProjectReference,
         startedAt: Date,
         connection: SQLiteConnection
-    ) throws {
+    ) throws -> String {
         let standardizedPath = project.rootURL.standardizedFileURL.path(percentEncoded: false)
         let pathHash = SHA256.hash(data: Data(standardizedPath.utf8)).map { String(format: "%02x", $0) }.joined()
+
+        if let canonicalID = try projectID(
+            matching: "stable_path_hash",
+            value: pathHash,
+            connection: connection
+        ) {
+            try updateProject(canonicalID, from: project, connection: connection)
+            return canonicalID
+        }
+        if let canonicalID = try projectID(
+            matching: "id",
+            value: project.id.description,
+            connection: connection
+        ) {
+            try updateProject(canonicalID, from: project, connection: connection)
+            return canonicalID
+        }
+
         try connection.execute(
             """
             INSERT INTO projects(id, stable_path_hash, display_name, redacted_path, created_at)
             VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name, redacted_path = excluded.redacted_path
             """,
             bindings: [
                 .text(project.id.description), .text(pathHash), .text(project.name),
                 .text(project.rootURL.lastPathComponent), .real(startedAt.timeIntervalSince1970)
             ]
+        )
+        return project.id.description
+    }
+
+    private func projectID(
+        matching column: String,
+        value: String,
+        connection: SQLiteConnection
+    ) throws -> String? {
+        guard let row = try connection.query(
+            "SELECT id FROM projects WHERE \(column) = ? LIMIT 1",
+            bindings: [.text(value)]
+        ).first?.first else { return nil }
+        guard case let .text(identifier) = row else {
+            throw PersistenceError.invalidStoredValue("project.id")
+        }
+        return identifier
+    }
+
+    private func updateProject(
+        _ identifier: String,
+        from project: ProjectReference,
+        connection: SQLiteConnection
+    ) throws {
+        try connection.execute(
+            "UPDATE projects SET display_name = ?, redacted_path = ? WHERE id = ?",
+            bindings: [.text(project.name), .text(project.rootURL.lastPathComponent), .text(identifier)]
         )
     }
 
@@ -99,6 +147,7 @@ extension DatabaseActor {
 
     private func upsertSession(
         for write: EventWrite,
+        projectID: String,
         terminalID: String?,
         connection: SQLiteConnection
     ) throws {
@@ -123,7 +172,7 @@ extension DatabaseActor {
             bindings: [
                 .text(session.id.description), session.externalSessionID.map(SQLiteValue.text) ?? .null,
                 .text(session.adapterID.rawValue), .text(write.envelope.source.adapterVersion),
-                .text(session.nodeID.description), .text(session.project.id.description),
+                .text(session.nodeID.description), .text(projectID),
                 session.parentSessionID.map { .text($0.description) } ?? .null,
                 .text(session.state.rawValue), .real(session.startedAt.timeIntervalSince1970),
                 session.endedAt.map { .real($0.timeIntervalSince1970) } ?? .null,

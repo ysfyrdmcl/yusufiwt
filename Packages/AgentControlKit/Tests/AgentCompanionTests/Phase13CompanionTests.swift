@@ -109,7 +109,7 @@ private func inboxItem(
 @Test func notificationPrivacyAndGenericFallbackAreDeterministic() {
     let item = inboxItem(risk: .high)
     let hidden = CompanionNotificationRenderer.render(item, privacy: .hidden)
-    #expect(hidden.title == "AgentControl")
+    #expect(hidden.title == "yusufiwt")
     #expect(!hidden.body.contains(item.projectName))
     #expect(hidden.categoryIdentifier == CompanionNotificationCategory.highApproval)
 
@@ -130,8 +130,12 @@ private func inboxItem(
     )
     let url = try PairingQRCodeCodec.encode(payload)
     #expect(try PairingQRCodeCodec.decode(url.absoluteString, now: phase13Now) == payload)
+    var brandedPairingURL = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    brandedPairingURL.scheme = "yusufiwt"
+    #expect(try PairingQRCodeCodec.decode(#require(brandedPairingURL.url).absoluteString, now: phase13Now) == payload)
 
     let requestID = UUID()
     #expect(try CompanionDeepLink(url: #require(URL(string: "agentcontrol://inbox/\(requestID)"))) == .inbox(requestID))
+    #expect(try CompanionDeepLink(url: #require(URL(string: "yusufiwt://inbox/\(requestID)"))) == .inbox(requestID))
     #expect(try CompanionDeepLink(url: #require(URL(string: "https://example.com"))) == nil)
 }

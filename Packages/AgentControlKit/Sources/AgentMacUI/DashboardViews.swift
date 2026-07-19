@@ -86,9 +86,15 @@
         var body: some View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AgentControlSpacing.section) {
-                    Text("overview.title")
-                        .font(.largeTitle.bold())
-                        .accessibilityAddTraits(.isHeader)
+                    HStack(spacing: AgentControlSpacing.standard) {
+                        Image("YusufiwtBrandMark")
+                            .resizable()
+                            .frame(width: 42, height: 42)
+                            .accessibilityHidden(true)
+                        Text("overview.title")
+                            .font(.largeTitle.bold())
+                            .accessibilityAddTraits(.isHeader)
+                    }
                     HStack(spacing: AgentControlSpacing.standard) {
                         MetricCard(title: "overview.active", value: store.activeSessions.count, symbol: "bolt.fill", color: .blue)
                         MetricCard(title: "overview.inbox", value: store.pendingDecisions.count, symbol: "tray.full.fill", color: .orange)

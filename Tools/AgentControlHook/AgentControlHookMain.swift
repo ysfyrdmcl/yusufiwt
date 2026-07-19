@@ -17,6 +17,31 @@ enum AgentControlHookMain {
 
             let configuration = try HookConfiguration.environment()
             let client = AgentControlHookClient(configuration: configuration)
+            if command.hasPrefix("managed-") {
+                guard arguments.count == 2,
+                      let provider = HookProvider(rawValue: arguments[1]),
+                      provider != .generic
+                else { throw CLIError.usage }
+                let executableURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+                let manager = ManagedProviderIntegrationManager(hookExecutableURL: executableURL)
+                switch command {
+                case "managed-preview":
+                    let preview = try await manager.preview(provider: provider)
+                    try writeJSON(ManagedCommandResult(provider: provider.rawValue, action: "preview", detail: preview.diff))
+                case "managed-install":
+                    try await manager.installAtomically([provider])
+                    try writeJSON(ManagedCommandResult(provider: provider.rawValue, action: "install", detail: "ok"))
+                case "managed-repair":
+                    try await manager.repair(provider)
+                    try writeJSON(ManagedCommandResult(provider: provider.rawValue, action: "repair", detail: "ok"))
+                case "managed-uninstall":
+                    try await manager.uninstall(provider)
+                    try writeJSON(ManagedCommandResult(provider: provider.rawValue, action: "uninstall", detail: "ok"))
+                default:
+                    throw CLIError.unknownCommand(command)
+                }
+                return
+            }
             let response: HelperResponse
             switch command {
             case "emit", "notify":
@@ -49,8 +74,10 @@ enum AgentControlHookMain {
                 )
                 let mapper = ProviderHookMapper()
                 let mapping = try mapper.map(provider: provider, input: input)
-                if let request = mapping.decisionRequest {
-                    response = await client.requestDecision(request)
+                if !mapping.decisionRequests.isEmpty {
+                    let responses = await requestDecisions(mapping.decisionRequests, client: client)
+                    try writeJSON(mapper.providerOutput(for: responses, mapping: mapping))
+                    return
                 } else {
                     response = await client.emit(mapping.submission, notification: true)
                 }
@@ -65,6 +92,24 @@ enum AgentControlHookMain {
             let failure = HelperResponse.failure(code: "hook.invalid_invocation", safeMessage: "The hook request was invalid.")
             try? writeJSON(failure)
             exit(64)
+        }
+    }
+
+    private static func requestDecisions(
+        _ requests: [HookDecisionRequest],
+        client: AgentControlHookClient
+    ) async -> [HelperResponse] {
+        await withTaskGroup(of: (Int, HelperResponse).self) { group in
+            for (index, request) in requests.enumerated() {
+                group.addTask {
+                    (index, await client.requestDecision(request))
+                }
+            }
+            var responses = Array(repeating: HelperResponse.neutral(reason: .timeout), count: requests.count)
+            for await (index, response) in group {
+                responses[index] = response
+            }
+            return responses
         }
     }
 
@@ -107,9 +152,15 @@ private enum CLIError: Error, CustomStringConvertible {
 
     var description: String {
         switch self {
-        case .usage: "usage: agentcontrol-hook <emit|request-decision|notify|doctor|provider-hook PROVIDER|version> [--json FILE|-]"
+        case .usage: "usage: agentcontrol-hook <emit|request-decision|notify|doctor|provider-hook PROVIDER|managed-preview PROVIDER|managed-install PROVIDER|managed-repair PROVIDER|managed-uninstall PROVIDER|version> [--json FILE|-]"
         case .missingJSONValue: "--json requires a file path or -"
         case let .unknownCommand(command): "unknown command: \(command)"
         }
     }
+}
+
+private struct ManagedCommandResult: Codable {
+    let provider: String
+    let action: String
+    let detail: String
 }

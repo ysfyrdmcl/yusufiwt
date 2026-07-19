@@ -1,8 +1,8 @@
-# AgentControl privacy policy
+# yusufiwt privacy policy
 
 Effective date: 2026-07-18
 
-AgentControl is local-first and does not sell data, advertise, or cross-app
+yusufiwt is local-first and does not sell data, advertise, or cross-app
 track. Prompt text, source, terminal output, command content, full paths,
 credentials, and secret answers are not retained by default.
 
@@ -13,7 +13,7 @@ content. Acknowledged/expired ciphertext is removed under short retention;
 encrypted infrastructure backups expire under the backup schedule.
 
 Apple may provide aggregate crash/App Store metrics under Apple’s terms.
-AgentControl sends no custom content-bearing analytics stream. Support exports
+yusufiwt sends no custom content-bearing analytics stream. Support exports
 require user action/consent and can be reviewed before sharing; secret/sensitive
 attachments are excluded and credential shapes/home paths are redacted.
 

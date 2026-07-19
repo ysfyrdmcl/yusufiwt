@@ -99,7 +99,11 @@
         public var body: some View {
             VStack(spacing: 0) {
                 HStack {
-                    Label("onboarding.title", systemImage: "bolt.shield")
+                    Image("YusufiwtBrandMark")
+                        .resizable()
+                        .frame(width: 34, height: 34)
+                        .accessibilityHidden(true)
+                    Text("onboarding.title")
                         .font(.title2.bold())
                     Spacer()
                     Text("\(stepNumber)/7").foregroundStyle(.secondary)
@@ -141,14 +145,10 @@
                         set: { coordinator.setMode($0) }
                     )) {
                         Text("onboarding.mode.local").tag(AgentControlWorkingMode.localOnly)
-                        Text("onboarding.mode.personal").tag(AgentControlWorkingMode.personalRemote)
-                        Text("onboarding.mode.selfHosted").tag(AgentControlWorkingMode.selfHostedRemote)
                     }
                     .pickerStyle(.radioGroup)
-                    if coordinator.workingMode != .localOnly {
-                        Label("onboarding.mode.remoteDeferred", systemImage: "info.circle")
-                            .foregroundStyle(.secondary)
-                    }
+                    Label("onboarding.mode.remoteDeferred", systemImage: "info.circle")
+                        .foregroundStyle(.secondary)
                 }
             case .coreServices:
                 VStack(alignment: .leading, spacing: 18) {

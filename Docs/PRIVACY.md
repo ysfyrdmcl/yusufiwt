@@ -1,6 +1,6 @@
 # Privacy
 
-AgentControl is local-first. Prompt text, source code, terminal output, command
+yusufiwt is local-first. Prompt text, source code, terminal output, command
 content, full paths, credentials, and secret answers are not retained by
 default. The Phase 9 privacy controls keep local analytics enabled by default
 while prompt and terminal-output storage remain disabled.
@@ -16,7 +16,7 @@ opt-in.
 
 Terminal navigation stores only the application bundle identifier, opaque
 window/tab/pane identifiers, a correlation token, and an optional workspace
-URI already present in the local hook environment. AgentControl does not read
+URI already present in the local hook environment. yusufiwt does not read
 terminal output or use Screen Recording. Accessibility is an opt-in navigation
 fallback, and Automation is requested only for a detected terminal after an
 explicit user action. These permissions are checked without prompting during

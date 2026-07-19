@@ -57,6 +57,35 @@ struct Phase6AdapterTests {
         }
     }
 
+    @Test("JSON repair refreshes owned hook settings without touching user hooks")
+    func jsonRepairRefreshesOwnedEntry() throws {
+        let oldHook = HookCommandDefinition(
+            event: "PermissionRequest",
+            command: "'/old/agentcontrol-hook' provider-hook codex",
+            timeoutSeconds: 60,
+            marker: "agentcontrol.codex.permissionrequest"
+        )
+        let newHook = HookCommandDefinition(
+            event: "PermissionRequest",
+            command: "'/new/agentcontrol-hook' provider-hook codex",
+            timeoutSeconds: 70,
+            marker: oldHook.marker
+        )
+        let engine = ManagedConfigPatchEngine()
+        let installed = try engine.previewInstall(
+            content: "{\"hooks\":{\"PermissionRequest\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"user-hook\"}]}]}}\n",
+            format: .json,
+            hooks: [oldHook]
+        )
+        let repaired = try engine.previewInstall(content: installed.updated, format: .json, hooks: [newHook])
+
+        #expect(repaired.updated.contains("user-hook"))
+        #expect(repaired.updated.contains("/new/agentcontrol-hook"))
+        #expect(repaired.updated.contains("\"timeout\":70"))
+        #expect(!repaired.updated.contains("/old/agentcontrol-hook"))
+        #expect(try !(engine.previewInstall(content: repaired.updated, format: .json, hooks: [newHook])).hasChanges)
+    }
+
     @Test("Installer previews diffs, backs up, and rejects stale previews")
     func installerSafety() async throws {
         let directory = URL(fileURLWithPath: "/private/tmp/ac-phase6-\(UUID().uuidString)", isDirectory: true)
@@ -118,6 +147,18 @@ struct Phase6AdapterTests {
             #expect(Set(installation.hooks.map(\.event)) == expected[provider])
             #expect(installation.hooks.allSatisfy { $0.command.contains("provider-hook \(provider.rawValue)") })
             #expect(installation.hooks.allSatisfy { $0.command.contains("AGENTCONTROL_PROVIDER_VERSION") })
+            if provider == .codex || provider == .claude {
+                #expect(installation.hooks.first(where: { $0.event == "PermissionRequest" })?.timeoutSeconds == 70)
+                if provider == .codex {
+                    #expect(installation.hooks.first(where: { $0.event == "PreToolUse" })?.timeoutSeconds == 70)
+                }
+                #expect(installation.hooks
+                    .filter {
+                        $0.event != "PermissionRequest" && $0.event != "Elicitation"
+                            && !(provider == .codex && $0.event == "PreToolUse")
+                    }
+                    .allSatisfy { $0.timeoutSeconds >= 5 })
+            }
         }
     }
 
@@ -178,6 +219,9 @@ struct Phase6AdapterTests {
             default: Issue.record("Unexpected mapped event for \(fixture.name)")
             }
             #expect((mapping.decisionRequest != nil) == fixture.expectsDecision)
+            if fixture.expectsDecision {
+                #expect(mapping.decisionRequest?.waitTimeoutMilliseconds == 60000)
+            }
         }
     }
 

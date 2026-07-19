@@ -13,7 +13,7 @@
         public init(
             socketURL: URL,
             spoolDirectory: URL,
-            decisionTimeoutMilliseconds: Int32 = 25000,
+            decisionTimeoutMilliseconds: Int32 = 65000,
             statusTimeoutMilliseconds: Int32 = 250,
             maximumInputBytes: Int = 1_048_576,
             nativeFallbackEnabled: Bool = true
@@ -37,7 +37,7 @@
             return HookConfiguration(
                 socketURL: socketURL,
                 spoolDirectory: spoolDirectory,
-                decisionTimeoutMilliseconds: Self.int32(environment["AGENTCONTROL_HOOK_TIMEOUT_MS"], default: 25000),
+                decisionTimeoutMilliseconds: Self.int32(environment["AGENTCONTROL_HOOK_TIMEOUT_MS"], default: 65000),
                 statusTimeoutMilliseconds: Self.int32(environment["AGENTCONTROL_STATUS_TIMEOUT_MS"], default: 250),
                 maximumInputBytes: Self.int(environment["AGENTCONTROL_MAX_INPUT_BYTES"], default: 1_048_576),
                 nativeFallbackEnabled: environment["AGENTCONTROL_NATIVE_FALLBACK"] != "0"
