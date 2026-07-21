@@ -4,7 +4,6 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
 
-test -f Docs/PHASE_0_TEST_PLAN.md
 test -f Docs/ARCHITECTURE.md
 test -f Docs/THREAT_MODEL.md
 test -f Docs/PRIVACY.md

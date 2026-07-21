@@ -2,4 +2,4 @@
 --indent 4
 --commas inline
 --stripunusedargs closure-only
---disable swiftTestingTestCaseNames
+--disable swiftTestingTestCaseNames,wrapMultilineStatementBraces

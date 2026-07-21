@@ -57,7 +57,10 @@ struct Phase9RuntimeTests {
         #expect(await stack.runtime.handle(.upsertRule(.alert(alert))).savedRuleID == alert.id)
         #expect(await stack.runtime.handle(.listRules).ruleCount == 1)
         #expect(await stack.runtime.handle(.privacySettings).privacyValue == .privacyFirst)
-        #expect(await stack.runtime.handle(.diagnostics).diagnosticsValue?.schemaVersion == 2)
+        #expect(
+            await stack.runtime.handle(.diagnostics).diagnosticsValue?.schemaVersion
+                == AgentControlMigrations.all.last?.version
+        )
         #expect(await stack.runtime.handle(.repair(.checkpointDatabase)).repairValue?.action == .checkpointDatabase)
         await stack.runtime.gracefulShutdown()
     }

@@ -65,6 +65,44 @@ struct DatabaseActorTests {
         #expect(try await reopened.session(id: fixture.sessionID)?.state == .running)
     }
 
+    @Test("Usage metrics persist in the session snapshot and list read model")
+    func usageSnapshotPersistence() async throws {
+        let location = try temporaryDatabaseURL()
+        let fixture = try Fixture()
+        let usage = SessionUsageMetric(
+            provider: AdapterID("codex"), kind: .quotaRemaining,
+            remainingPercent: 73, source: "fixture", updatedAt: fixture.date
+        )
+        let database = try DatabaseActor(configuration: DatabaseConfiguration(url: location))
+        #expect(try await database.append(fixture.write(
+            sequence: 1, revision: 1, state: .running, usageMetrics: [usage]
+        )) == .appended)
+        try await database.checkpoint()
+        await database.close()
+
+        let reopened = try DatabaseActor(configuration: DatabaseConfiguration(url: location))
+        #expect(try await reopened.session(id: fixture.sessionID)?.usageMetrics == [usage])
+        #expect(try await reopened.sessions().first?.usageMetrics == [usage])
+        await reopened.close()
+    }
+
+    @Test("Usage migration upgrades an existing version two database")
+    func usageMigrationUpgrade() async throws {
+        let location = try temporaryDatabaseURL()
+        let old = try DatabaseActor(
+            configuration: DatabaseConfiguration(url: location),
+            migrations: [AgentControlMigrations.initialSchema, AgentControlMigrations.phase9Indexes]
+        )
+        await old.close()
+
+        let migrated = try DatabaseActor(configuration: DatabaseConfiguration(url: location))
+        let fixture = try Fixture()
+        #expect(try await migrated.append(fixture.write(sequence: 1, revision: 1, state: .running)) == .appended)
+        #expect(try await migrated.session(id: fixture.sessionID)?.usageMetrics == [])
+        await migrated.close()
+        #expect(FileManager.default.fileExists(atPath: location.appendingPathExtension("pre-migration-v3.backup").path))
+    }
+
     @Test("MainActor callers open disk databases through a detached factory")
     @MainActor
     func detachedOpenFromMainActor() async throws {
@@ -242,7 +280,8 @@ private struct Fixture: Sendable {
         state: SessionState,
         newEventID: Bool = false,
         privacy: PrivacyClass = .privateMetadata,
-        marker: String? = nil
+        marker: String? = nil,
+        usageMetrics: [SessionUsageMetric] = []
     ) -> EventWrite {
         let eventID = newEventID || sequence != 1 ? EventID(UUID()) : baseEventID
         let payload: JSONValue = marker.map { .object(["marker": .string($0)]) }
@@ -258,7 +297,8 @@ private struct Fixture: Sendable {
             id: sessionID, nodeID: nodeID, adapterID: AdapterID("codex"), externalSessionID: "provider-session",
             project: ProjectReference(id: projectID, name: "AgentControl", rootURL: URL(fileURLWithPath: "/Users/example/AgentControl")),
             terminalContext: nil, parentSessionID: nil, state: state, startedAt: date, endedAt: state.isTerminal ? date : nil,
-            lastMeaningfulEventAt: date.addingTimeInterval(Double(sequence)), snapshotRevision: revision
+            lastMeaningfulEventAt: date.addingTimeInterval(Double(sequence)), snapshotRevision: revision,
+            usageMetrics: usageMetrics
         )
         return EventWrite(envelope: envelope, snapshot: session)
     }

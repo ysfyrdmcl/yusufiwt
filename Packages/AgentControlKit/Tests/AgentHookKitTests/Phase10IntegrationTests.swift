@@ -72,11 +72,12 @@
                 detector: detector,
                 receiptURL: receipts
             )
-            let providers = [HookProvider.codex, .claude, .gemini]
+            let providers = [HookProvider.codex, .claude, .gemini, .cursor]
             let configs = [
                 HookProvider.codex: home.appendingPathComponent(".codex/hooks.json"),
                 .claude: home.appendingPathComponent(".claude/settings.json"),
-                .gemini: home.appendingPathComponent(".gemini/settings.json")
+                .gemini: home.appendingPathComponent(".gemini/settings.json"),
+                .cursor: home.appendingPathComponent(".cursor/hooks.json")
             ]
             let userConfig = "{\"theme\":\"dark\",\"hooks\":{\"SessionStart\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"user-hook\"}]}]}}\n"
             for provider in providers {

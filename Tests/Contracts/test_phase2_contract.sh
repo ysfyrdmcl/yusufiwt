@@ -4,7 +4,6 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
 
-test -f Docs/PHASE_2_TEST_PLAN.md
 test -x Scripts/test_persistence_process_crash.sh
 grep -q 'public actor DatabaseActor' Packages/AgentControlKit/Sources/AgentPersistence/DatabaseActor.swift
 grep -q 'connection.transaction' Packages/AgentControlKit/Sources/AgentPersistence/DatabaseActor.swift

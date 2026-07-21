@@ -1,0 +1,1 @@
+{"session_id":"claude-plan","cwd":"/private/tmp/work","hook_event_name":"PreToolUse","tool_name":"ExitPlanMode","tool_use_id":"claude-plan-tool-1","tool_input":{"plan":"Implement the requested changes and run the test suite.","planFilePath":"/private/tmp/work/.claude/plans/implementation.md"}}

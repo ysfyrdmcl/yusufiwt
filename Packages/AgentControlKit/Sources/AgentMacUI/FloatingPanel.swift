@@ -13,11 +13,17 @@
         public private(set) var mode: NotchPanelMode = .compact
         public private(set) var notchWidth: CGFloat = 0
         public private(set) var notchHeight: CGFloat = 0
+        public private(set) var applicationPreferences: MacLocalPreferences
+        public private(set) var isNotificationSoundEnabled: Bool
 
         @ObservationIgnored
         private let store: AgentControlStore
         @ObservationIgnored
         private var notificationPreferences: MacNotificationPreferences
+        @ObservationIgnored
+        private let openControlCenterHandler: @MainActor () -> Void
+        @ObservationIgnored
+        private let notificationPreferencesHandler: @MainActor (MacNotificationPreferences) -> Void
         @ObservationIgnored
         private var panel: AgentControlPanel?
         @ObservationIgnored
@@ -39,10 +45,17 @@
 
         public init(
             store: AgentControlStore,
-            notificationPreferences: MacNotificationPreferences = .init()
+            notificationPreferences: MacNotificationPreferences = .init(),
+            applicationPreferences: MacLocalPreferences = .init(),
+            openControlCenter: @escaping @MainActor () -> Void = {},
+            notificationPreferencesChanged: @escaping @MainActor (MacNotificationPreferences) -> Void = { _ in }
         ) {
             self.store = store
             self.notificationPreferences = notificationPreferences
+            self.applicationPreferences = applicationPreferences
+            isNotificationSoundEnabled = notificationPreferences.soundEnabled
+            openControlCenterHandler = openControlCenter
+            notificationPreferencesHandler = notificationPreferencesChanged
             let center = NotificationCenter.default
             observers.append(center.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -66,7 +79,7 @@
             let panel = panel ?? makePanel()
             self.panel = panel
             captureCurrentStoreState()
-            mode = store.pendingDecisions.isEmpty || !shouldPresentDecisions ? .compact : .decision
+            mode = store.pendingDecisions.isEmpty || !shouldAutoPresentDecisions ? .compact : .decision
             store.isPanelExpanded = mode.showsDetails
             updateSize(animated: false)
             panel.orderFrontRegardless()
@@ -119,9 +132,27 @@
             setMode(.expanded, animated: true, makeKey: true)
         }
 
+        public func openControlCenter() {
+            openControlCenterHandler()
+        }
+
+        public func toggleNotificationSound() {
+            notificationPreferences.soundEnabled.toggle()
+            isNotificationSoundEnabled = notificationPreferences.soundEnabled
+            notificationPreferencesHandler(notificationPreferences)
+        }
+
         public func updateNotificationPreferences(_ value: MacNotificationPreferences) {
             notificationPreferences = value
+            isNotificationSoundEnabled = value.soundEnabled
             if !value.enabled, store.pendingDecisions.isEmpty, mode != .expanded {
+                setMode(.compact, animated: true)
+            }
+        }
+
+        public func updateApplicationPreferences(_ value: MacLocalPreferences) {
+            applicationPreferences = value
+            if !value.showPanelForAttention, mode == .decision {
                 setMode(.compact, animated: true)
             }
         }
@@ -146,7 +177,10 @@
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = true
-            panel.becomesKeyOnlyIfNeeded = true
+            // The expanded panel must become key so Escape reaches cancelOperation.
+            // NSPanel's default "only if needed" behavior skips key status when the
+            // current SwiftUI content has no text control, leaving Escape ineffective.
+            panel.becomesKeyOnlyIfNeeded = false
             panel.cancelHandler = { [weak self] in self?.setExpanded(false) }
             panel.contentView = NSHostingView(rootView: FloatingPanelView(store: store, coordinator: self))
             return panel
@@ -238,16 +272,20 @@
             }
 
             if !store.pendingDecisions.isEmpty {
-                if shouldPresentDecisions, mode != .expanded, hasNewDecision || mode == .decision {
+                if shouldAutoPresentDecisions, mode != .expanded, hasNewDecision || mode == .decision {
                     setMode(.decision, animated: true)
                 }
                 return
             }
 
-            if removedDecision, shouldPresentDecisions {
-                highlightedSessionID = changedSession?.id
-                setMode(.activity, animated: true)
-                scheduleCompact(after: .seconds(2))
+            if removedDecision {
+                if applicationPreferences.closePanelAfterDecision {
+                    highlightedSessionID = changedSession?.id
+                    setMode(.activity, animated: true)
+                    scheduleCompact(after: .seconds(2))
+                } else if mode != .expanded {
+                    setMode(.expanded, animated: true, makeKey: true)
+                }
                 return
             }
 
@@ -279,6 +317,7 @@
         }
 
         private func scheduleCompact(after duration: Duration) {
+            guard applicationPreferences.autoHideActivity else { return }
             collapseTask?.cancel()
             collapseTask = Task { [weak self] in
                 do {
@@ -301,10 +340,10 @@
             return store.activeAlerts.first(where: { $0.id == highlightedAlertID })
         }
 
-        private var shouldPresentDecisions: Bool {
-            // A pending decision is part of the in-app control surface, not a system
-            // notification. It must remain actionable even when notifications are disabled.
-            true
+        private var shouldAutoPresentDecisions: Bool {
+            // Pending decisions remain visible in the compact status even when automatic
+            // expansion is disabled. This switch controls presentation, not authority.
+            applicationPreferences.showPanelForAttention
         }
 
         private var shouldPresentLongRunningAlerts: Bool {

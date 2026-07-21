@@ -15,13 +15,14 @@
 
         public var body: some View {
             NavigationSplitView {
-                List(DashboardSection.allCases, selection: $store.selectedSection) { section in
+                List(ControlCenterInformationArchitecture.primarySections, selection: navigationSelection) { section in
                     Label(section.titleKey, systemImage: section.symbol)
-                        .badge(section == .inbox ? store.pendingDecisions.count : 0)
                         .tag(section)
                 }
-                .navigationTitle("app.name")
+                .navigationTitle("controlCenter.title")
+                .navigationSplitViewColumnWidth(min: 210, ideal: 235)
                 .accessibilityLabel("sidebar.accessibility")
+                .accessibilityIdentifier("controlCenter.sidebar")
             } detail: {
                 VStack(spacing: 0) {
                     ConnectionBanner(store: store)
@@ -29,13 +30,26 @@
                 }
             }
             .frame(minWidth: 860, minHeight: 560)
-            .task { store.start() }
+            .task {
+                store.start()
+                if store.selectedSection == .overview {
+                    store.selectedSection = .integrations
+                }
+                await store.refreshSelectedOperations()
+            }
             .onChange(of: store.selectedSection) { _, _ in
                 Task { await store.refreshSelectedOperations() }
             }
             .sheet(isPresented: $phase10.isOnboardingPresented) {
                 AgentControlOnboardingView(coordinator: phase10)
             }
+        }
+
+        private var navigationSelection: Binding<DashboardSection> {
+            Binding(
+                get: { ControlCenterInformationArchitecture.navigationSection(for: store.selectedSection) },
+                set: { store.selectedSection = $0 }
+            )
         }
 
         @ViewBuilder
@@ -49,12 +63,10 @@
                 case .overview: OverviewView(store: store)
                 case .active: ActiveSessionsView(store: store)
                 case .inbox: InboxView(store: store)
-                case .history: HistoryView(store: store)
-                case .analytics: AnalyticsView(store: store)
+                case .history, .analytics: HistoryAnalyticsControlCenterView(store: store)
                 case .rules: RulesView(store: store)
-                case .diagnostics: DiagnosticsView(store: store)
-                case .privacy: PrivacySettingsView(store: store)
-                case .integrations: IntegrationManagerView(coordinator: phase10)
+                case .diagnostics, .privacy: PrivacyDiagnosticsControlCenterView(store: store)
+                case .integrations: IntegrationManagerView(store: store, coordinator: phase10)
                 }
             }
         }
@@ -105,7 +117,7 @@
                             .font(.title2.bold())
                         ForEach(store.activeAlerts) { alert in
                             Label(
-                                "\(alert.kind.rawValue) • \(Int(alert.observedDurationSeconds / 60)) min",
+                                "\(NotchPanelFormatting.alertTitle(alert.kind)) • \(Int(alert.observedDurationSeconds / 60)) min",
                                 systemImage: "bell.badge.fill"
                             )
                             .foregroundStyle(.orange)
@@ -326,11 +338,11 @@
             case .overview: "sidebar.overview"
             case .active: "sidebar.active"
             case .inbox: "sidebar.inbox"
-            case .history: "sidebar.history"
-            case .analytics: "sidebar.analytics"
-            case .rules: "sidebar.rules"
-            case .diagnostics: "sidebar.diagnostics"
-            case .privacy: "sidebar.privacy"
+            case .history: "sidebar.historyAnalytics"
+            case .analytics: "sidebar.historyAnalytics"
+            case .rules: "sidebar.automation"
+            case .diagnostics: "sidebar.privacyDiagnostics"
+            case .privacy: "sidebar.privacyDiagnostics"
             case .integrations: "sidebar.integrations"
             }
         }

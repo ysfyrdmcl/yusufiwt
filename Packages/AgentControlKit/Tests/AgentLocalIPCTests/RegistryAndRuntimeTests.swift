@@ -35,6 +35,29 @@ struct RegistryAndRuntimeTests {
         await secondDatabase.close()
     }
 
+    @Test("Restart restores usage ordering and rejects an older provider sequence")
+    func usageOrderingAfterRestart() async throws {
+        let paths = try temporaryPaths()
+        let fixture = try LocalIPCFixture()
+        let first = try await makeTestRuntime(paths: paths)
+        #expect(try await first.registry.ingest(fixture.usageSubmission(
+            sequence: 2, remainingPercent: 73
+        )) == .appended)
+        try await first.database.checkpoint()
+        await first.database.close()
+
+        let secondDatabase = try DatabaseActor(configuration: DatabaseConfiguration(url: paths.databaseURL))
+        let secondRegistry = SessionRegistryActor(database: secondDatabase)
+        #expect(try await secondRegistry.restoreActiveSnapshots() == 1)
+        #expect(try await secondRegistry.ingest(fixture.usageSubmission(
+            sequence: 1, remainingPercent: 12
+        )) == .duplicate)
+        let restored = try #require(await secondRegistry.session(id: fixture.sessionID))
+        #expect(restored.usageMetrics.first?.remainingPercent == 73)
+        #expect(try await secondDatabase.eventCount() == 1)
+        await secondDatabase.close()
+    }
+
     @Test("Health, heartbeat, protocol negotiation, and update handoff are typed")
     func controlEndpoints() async throws {
         let paths = try temporaryPaths()
@@ -44,6 +67,16 @@ struct RegistryAndRuntimeTests {
         let health = await stack.runtime.handle(.health)
         #expect(health.healthValue?.databaseHealthy == true)
         #expect(health.healthValue?.socketAcceptingConnections == true)
+        #expect(await stack.runtime.handle(.negotiateProtocol(supportedVersions: [
+            LocalIPCVersion(major: 1, minor: 0),
+            LocalIPCVersion(major: 1, minor: 99)
+        ])).negotiatedProtocolVersion == LocalIPCContract.current)
+        #expect(await stack.runtime.handle(.negotiateProtocol(supportedVersions: [
+            LocalIPCVersion(major: 1, minor: 0)
+        ])).negotiatedProtocolVersion == LocalIPCVersion(major: 1, minor: 0))
+        #expect(await stack.runtime.handle(.negotiateProtocol(supportedVersions: [
+            LocalIPCVersion(major: 99, minor: 0)
+        ])).neutralReason == .unsupportedProtocol)
         #expect(await stack.runtime.handle(.negotiate(supportedVersions: [1])).negotiatedVersion == 1)
         #expect(await stack.runtime.handle(.negotiate(supportedVersions: [99])).neutralReason == .unsupportedProtocol)
         #expect(await stack.runtime.handle(.heartbeat).heartbeatSequence == 1)
@@ -97,6 +130,13 @@ private extension HelperResponse {
 
     var negotiatedVersion: UInt16? {
         if case let .negotiated(version) = self {
+            return version
+        }
+        return nil
+    }
+
+    var negotiatedProtocolVersion: LocalIPCVersion? {
+        if case let .protocolNegotiated(version) = self {
             return version
         }
         return nil

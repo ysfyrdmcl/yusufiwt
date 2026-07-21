@@ -5,8 +5,6 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
 
 for path in \
-  Docs/PHASE_15_TEST_PLAN.md \
-  Docs/PHASE_15_HARDENING_REPORT.md \
   Docs/RECOVERY_RUNBOOK.md \
   Docs/DEPENDENCY_AUDIT.md \
   Scripts/verify_phase15.sh \

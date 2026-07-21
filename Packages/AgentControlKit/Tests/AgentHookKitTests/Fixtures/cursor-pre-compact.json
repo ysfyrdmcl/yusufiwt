@@ -1,0 +1,1 @@
+{"conversation_id":"cursor-session","generation_id":"cursor-generation-2","hook_event_name":"preCompact","cursor_version":"3.7.12","workspace_roots":["/private/tmp/work"],"trigger":"auto","context_usage_percent":25,"context_tokens":250,"context_window_size":1000,"message_count":12,"messages_to_compact":8,"is_first_compaction":true}

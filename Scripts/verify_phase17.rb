@@ -13,7 +13,7 @@ class Phase17Verifier
     managed_codex provider_hooks push_notifications redacted_diagnostic_feedback
     watch_companion widgets
   ].freeze
-  REQUIRED_ADAPTERS = %w[codex claude gemini].freeze
+  REQUIRED_ADAPTERS = %w[codex claude gemini cursor].freeze
   REQUIRED_SIGNALS = %w[crash relay apns].freeze
 
   def initialize(root)
@@ -41,7 +41,7 @@ class Phase17Verifier
       Docs/DATA_DELETION.md
       Docs/RELEASE_CHECKLIST.md
       Docs/ROLLBACK_RUNBOOK.md
-      Docs/PHASE_17_TEST_PLAN.md
+      Docs/MAC_LOCAL_V1_RELEASE_CHECKLIST.md
       Services/AgentControlRelay/Sources/AgentControlRelay/OperationsServices.swift
     ]
     required.each { |path| assert(@root.join(path).file?, "required file exists: #{path}") }
@@ -59,7 +59,7 @@ class Phase17Verifier
 
     compatibility = json("Config/Operations/adapter-compatibility.json")
     adapters = compatibility.fetch("adapters")
-    assert((REQUIRED_ADAPTERS - adapters.map { |adapter| adapter.fetch("id") }).empty?, "Codex, Claude, and Gemini are published")
+    assert((REQUIRED_ADAPTERS - adapters.map { |adapter| adapter.fetch("id") }).empty?, "Codex, Claude, Gemini, and Cursor are published")
     assert(adapters.all? { |adapter| adapter.fetch("fallback") == "monitor_only" }, "unknown versions fail to monitor-only")
     assert(adapters.all? { |adapter| !adapter.fetch("evidence").empty? }, "every adapter has evidence")
     assert(compatibility.dig("localOnlyMode", "accountRequired") == false, "local-only mode requires no account")

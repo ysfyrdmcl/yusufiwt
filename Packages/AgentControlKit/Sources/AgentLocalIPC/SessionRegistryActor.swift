@@ -33,7 +33,11 @@
             var restored = 0
             for item in active {
                 if let snapshot = try await database.session(id: item.id) {
-                    aggregates[item.id] = SessionAggregate(session: snapshot)
+                    let sequences = try await database.latestSequenceBySource(sessionID: item.id)
+                    aggregates[item.id] = SessionAggregate(
+                        session: snapshot,
+                        lastSequenceBySource: sequences
+                    )
                     restored += 1
                 }
             }
@@ -54,6 +58,9 @@
                 event: submission.envelope.domainEvent
             )
             let application = aggregate.apply(event)
+            if application == .duplicate || application == .outOfOrder {
+                return .duplicate
+            }
             let meaningfulAt = Self.isUnknown(submission.envelope.domainEvent)
                 ? aggregate.session.lastMeaningfulEventAt
                 : submission.envelope.receivedAt

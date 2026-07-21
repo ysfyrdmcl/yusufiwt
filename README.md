@@ -21,8 +21,11 @@ Fake Agent Simulator, and a Protocol Inspector. Phase 5 adds the managed Codex
 app-server adapter with schema-aware fallback, managed thread/turn control,
 authoritative approval acknowledgment, bounded reconnect, and redacted
 diagnostics. Phase 6 adds lossless managed hook configuration and normalized
-Codex, Claude Code, Gemini CLI, and generic monitoring adapters. Phase 7 adds
-the native menu bar, multi-display floating panel, dashboard, inbox, session
+Codex, Claude Code, Gemini CLI, Cursor, and generic monitoring adapters. Cursor
+uses its documented session, scoped mutable-tool and shell/MCP decision, and compaction hooks; Agent
+question and plan-review capabilities are reported as unsupported until Cursor
+publishes structured events for them. Phase 7 adds the native menu bar,
+multi-display floating panel, explicit Control Center, inbox, session
 detail, reconnect-safe UI store, keyboard operation, and English/Turkish UI.
 Phases 8–17 add decision UX, operations/navigation, encrypted companion
 surfaces, hardening, release pipelines, privacy-safe support, account deletion,

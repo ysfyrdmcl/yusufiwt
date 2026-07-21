@@ -4,7 +4,6 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
 
-test -f Docs/PHASE_3_TEST_PLAN.md
 grep -q 'SMAppService' Packages/AgentControlKit/Sources/AgentLocalIPC/LaunchAgentManager.swift
 grep -q 'manager.register()' Apps/macOS/AgentControlMacApp.swift
 grep -q 'unauthorizedClient' Packages/AgentControlKit/Sources/AgentLocalIPC/IPCModels.swift

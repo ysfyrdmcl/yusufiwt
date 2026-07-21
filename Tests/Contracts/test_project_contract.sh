@@ -17,7 +17,8 @@ grep -q '<key>BundleProgram</key>' Config/LaunchAgents/com.yusuf.agentcontrol.he
 grep -q '<key>MachServices</key>' Config/LaunchAgents/com.yusuf.agentcontrol.helper.plist
 grep -q 'product: AgentLocalIPC' project.yml
 grep -q 'Embed LaunchAgent Helper' project.yml
-test -f Docs/PHASE_3_TEST_PLAN.md
+test -f PROJECT_AGENT_GUIDE.md
+test -f Docs/MAC_LOCAL_V1_SCOPE.md
 
 if find Apps Services Packages -type d -name .build -prune -o -type f -name '*.swift' -print0 \
   | xargs -0 grep -n 'fatalError("not implemented")\|TODO[^A-Z0-9-]' 2>/dev/null; then

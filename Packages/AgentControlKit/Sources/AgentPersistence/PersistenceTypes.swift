@@ -75,6 +75,7 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
     public let startedAt: Date
     public let lastMeaningfulEventAt: Date
     public let snapshotRevision: Int64
+    public let usageMetrics: [SessionUsageMetric]
 
     public init(
         id: SessionID,
@@ -83,7 +84,8 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
         state: SessionState,
         startedAt: Date,
         lastMeaningfulEventAt: Date,
-        snapshotRevision: Int64
+        snapshotRevision: Int64,
+        usageMetrics: [SessionUsageMetric] = []
     ) {
         self.id = id
         self.projectName = projectName
@@ -92,10 +94,11 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
         self.startedAt = startedAt
         self.lastMeaningfulEventAt = lastMeaningfulEventAt
         self.snapshotRevision = snapshotRevision
+        self.usageMetrics = usageMetrics
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, projectName, adapterID, state, startedAt, lastMeaningfulEventAt, snapshotRevision
+        case id, projectName, adapterID, state, startedAt, lastMeaningfulEventAt, snapshotRevision, usageMetrics
     }
 
     public init(from decoder: Decoder) throws {
@@ -107,6 +110,7 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
         lastMeaningfulEventAt = try container.decode(Date.self, forKey: .lastMeaningfulEventAt)
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt) ?? lastMeaningfulEventAt
         snapshotRevision = try container.decode(Int64.self, forKey: .snapshotRevision)
+        usageMetrics = try container.decodeIfPresent([SessionUsageMetric].self, forKey: .usageMetrics) ?? []
     }
 }
 

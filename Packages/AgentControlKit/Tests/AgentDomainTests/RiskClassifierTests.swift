@@ -57,6 +57,22 @@ struct RiskClassifierTests {
         #expect(deletion.level == .high)
     }
 
+    @Test("Shell wrappers cannot hide privilege escalation or recursive deletion")
+    func wrappedCriticalCommands() {
+        let classifier = RiskClassifier()
+        for script in ["sudo true", "rm -rf /private/tmp/fixture", "rm -r -f /private/tmp/fixture"] {
+            let result = classifier.classify(.init(
+                action: .executeCommand(.init(
+                    executable: URL(fileURLWithPath: "/bin/zsh"),
+                    arguments: ["-lc", script]
+                )),
+                workspaceRoot: URL(fileURLWithPath: "/workspace")
+            ))
+            #expect(result.level == .critical, "Script: \(script)")
+            #expect(result.remoteApproval == .forbidden, "Script: \(script)")
+        }
+    }
+
     @Test("Secret paths are critical and writable tools are medium")
     func actionDetails() {
         let classifier = RiskClassifier()

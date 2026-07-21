@@ -1,0 +1,1 @@
+{"conversation_id":"cursor-session","generation_id":"cursor-generation-2","hook_event_name":"beforeMCPExecution","cursor_version":"3.7.12","workspace_roots":["/private/tmp/work"],"tool_name":"deploy_preview","tool_input":"{\"environment\":\"staging\"}","url":"https://mcp.example.invalid"}

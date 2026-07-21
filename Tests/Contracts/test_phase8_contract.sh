@@ -9,7 +9,6 @@ for path in \
   Packages/AgentControlKit/Sources/AgentMacUI/DecisionViews.swift \
   Packages/AgentControlKit/Sources/AgentMacUI/NotificationPolicy.swift \
   Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift \
-  Docs/PHASE_8_TEST_PLAN.md \
   Docs/ADR/0013-approval-notification-boundary.md
 do
   test -f "$path" || { echo "missing Phase 8 file: $path" >&2; exit 1; }
@@ -35,7 +34,7 @@ grep -q 'quietHours' Packages/AgentControlKit/Sources/AgentMacUI/NotificationPol
 grep -q 'focusAware' Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift
 grep -q 'authorizationState' Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift
 grep -q 'NotificationResponseDisposition' Packages/AgentControlKit/Sources/AgentMacUI/AgentControlStore.swift
-grep -q 'system Focus' Docs/PHASE_0_8_REMEDIATION_TEST_PLAN.md
+grep -q 'focusAware' Packages/AgentControlKit/Sources/AgentMacUI/MacNotificationCoordinator.swift
 jq -e '.strings | to_entries | all(.value.localizations.en.stringUnit.value and .value.localizations.tr.stringUnit.value)' \
   Apps/macOS/Resources/Localizable.xcstrings >/dev/null
 

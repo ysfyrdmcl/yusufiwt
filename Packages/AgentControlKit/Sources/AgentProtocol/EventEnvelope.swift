@@ -92,6 +92,9 @@ public struct EventEnvelope: Codable, Sendable, Equatable {
         case "question.resolved":
             guard let resolution = decodePayload(QuestionResolution.self) else { return .unknown(type: eventType) }
             return .questionResolved(resolution.id)
+        case "session.usageUpdated":
+            guard let update = decodePayload(SessionUsageUpdate.self) else { return .unknown(type: eventType) }
+            return .usageUpdated(update)
         case "provider.resumed":
             return .providerResumed
         default:

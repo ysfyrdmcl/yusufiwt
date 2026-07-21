@@ -4,8 +4,8 @@ struct YusufiwtFlowShape: Shape {
     func path(in rect: CGRect) -> Path {
         let side = min(rect.width, rect.height)
         let origin = CGPoint(x: rect.midX - side / 2, y: rect.midY - side / 2)
-        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            CGPoint(x: origin.x + side * x, y: origin.y + side * y)
+        func point(_ horizontal: CGFloat, _ vertical: CGFloat) -> CGPoint {
+            CGPoint(x: origin.x + side * horizontal, y: origin.y + side * vertical)
         }
 
         var path = Path()

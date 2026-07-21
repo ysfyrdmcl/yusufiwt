@@ -30,6 +30,7 @@ build_scheme() {
 }
 
 build_target AgentControlMac macosx
+build_scheme AgentControlMacLocal 'generic/platform=macOS'
 build_target AgentControlHelper macosx
 build_target AgentControlHook macosx
 build_target FakeAgentSimulator macosx

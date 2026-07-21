@@ -11,15 +11,26 @@ struct AgentControlMacApp: App {
     @NSApplicationDelegateAdaptor(AgentControlAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        Window(String(localized: "app.name"), id: "dashboard") {
-            DashboardView(store: appDelegate.store, phase10: appDelegate.phase10)
-                .onOpenURL { appDelegate.store.handleNavigationCallback($0) }
+        MenuBarExtra {
+            MenuBarContent(
+                store: appDelegate.store,
+                settings: appDelegate.settingsState,
+                togglePanel: appDelegate.togglePanel,
+                openControlCenter: { appDelegate.openControlCenter() },
+                updateNotifications: appDelegate.updateNotifications
+            )
+            .environment(\.locale, appDelegate.settingsState.application.language.locale)
+        } label: {
+            MenuBarLabel(store: appDelegate.store)
+                .environment(\.locale, appDelegate.settingsState.application.language.locale)
         }
-        .defaultSize(width: 1060, height: 700)
+        .menuBarExtraStyle(.window)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("menu.checkForUpdates") { appDelegate.checkForUpdates() }
                     .disabled(!appDelegate.canCheckForUpdates)
+                Button("menu.openControlCenter") { appDelegate.openControlCenter() }
+                    .keyboardShortcut("o", modifiers: [.command])
                 Button("menu.togglePanel") { appDelegate.togglePanel() }
                     .keyboardShortcut(.space, modifiers: [.control, .option])
             }
@@ -31,19 +42,13 @@ struct AgentControlMacApp: App {
             #endif
         }
 
-        MenuBarExtra {
-            MenuBarContent(store: appDelegate.store, togglePanel: appDelegate.togglePanel)
-        } label: {
-            MenuBarLabel(store: appDelegate.store)
-        }
-        .menuBarExtraStyle(.window)
-
         Settings {
             MacLocalSettingsView(
-                preferences: appDelegate.hotKeyPreferences,
-                notificationStore: appDelegate.notificationPreferences,
+                state: appDelegate.settingsState,
                 onHotKeyChange: appDelegate.updateHotKey,
-                onNotificationChange: appDelegate.updateNotifications
+                onNotificationChange: appDelegate.updateNotifications,
+                onApplicationChange: appDelegate.updateApplicationPreferences,
+                openControlCenter: appDelegate.openControlCenter
             )
         }
     }
@@ -52,6 +57,13 @@ struct AgentControlMacApp: App {
 @MainActor
 final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
     let notificationPreferences = MacNotificationPreferencesStore()
+    let applicationPreferences = MacLocalPreferencesStore()
+    let hotKeyPreferences = GlobalHotKeyPreferences()
+    lazy var settingsState = MacSettingsState(
+        hotKey: hotKeyPreferences.load(),
+        notifications: notificationPreferences.load(),
+        application: applicationPreferences.value
+    )
     lazy var notificationCoordinator = MacNotificationCoordinator(preferences: notificationPreferences.load())
     #if canImport(Sparkle)
         private let updateController = SparkleUpdateController()
@@ -59,26 +71,29 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
     lazy var store = AgentControlStore(notificationCoordinator: notificationCoordinator)
     lazy var phase10 = Phase10Coordinator(notificationCoordinator: notificationCoordinator)
     private var panelCoordinator: FloatingPanelCoordinator?
+    private var controlCenterWindowController: ControlCenterWindowController?
     private var hotKeyController: GlobalHotKeyController?
     private var launchAgentManager: LaunchAgentManager?
-    let hotKeyPreferences = GlobalHotKeyPreferences()
+    private var hasPendingNotificationReview = false
 
     func applicationDidFinishLaunching(_: Notification) {
-        notificationCoordinator.responseHandler = { [weak self] response in
-            Task { await self?.store.handleNotificationResponse(response) }
-        }
-        notificationCoordinator.reviewHandler = { [weak self] in
-            self?.panelCoordinator?.presentInbox()
-        }
+        installNotificationHandlers()
         if phase10.isCompleted {
             Task { await notificationCoordinator.configure() }
         }
         let coordinator = FloatingPanelCoordinator(
             store: store,
-            notificationPreferences: notificationPreferences.load()
+            notificationPreferences: settingsState.notifications,
+            applicationPreferences: settingsState.application,
+            openControlCenter: { [weak self] in self?.openControlCenter() },
+            notificationPreferencesChanged: { [weak self] value in self?.updateNotifications(value) }
         )
         panelCoordinator = coordinator
         coordinator.start()
+        if hasPendingNotificationReview {
+            hasPendingNotificationReview = false
+            coordinator.presentInbox()
+        }
         notificationCoordinator.setUsesNotchSurface(true)
         hotKeyController = GlobalHotKeyController(setting: hotKeyPreferences.load()) { [weak coordinator] in coordinator?.toggle() }
         hotKeyController?.start()
@@ -105,6 +120,27 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
             }
             store.start()
         }
+        if phase10.isOnboardingPresented {
+            Task { @MainActor [weak self] in
+                await Task.yield()
+                self?.openControlCenter(.integrations)
+            }
+        }
+    }
+
+    private func installNotificationHandlers() {
+        notificationCoordinator.responseHandler = { [weak self] response in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                _ = await store.handleNotificationResponse(response)
+                if response.action == .review {
+                    presentNotificationReviewWhenReady()
+                }
+            }
+        }
+        notificationCoordinator.reviewHandler = { [weak self] in
+            self?.presentNotificationReviewWhenReady()
+        }
     }
 
     func applicationWillTerminate(_: Notification) {
@@ -113,8 +149,43 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
         store.stop()
     }
 
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            openControlCenter(phase10.isOnboardingPresented ? .integrations : store.selectedSection)
+            return false
+        }
+        return true
+    }
+
     func togglePanel() {
         panelCoordinator?.toggle()
+    }
+
+    private func presentNotificationReviewWhenReady() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        guard let panelCoordinator else {
+            hasPendingNotificationReview = true
+            return
+        }
+        panelCoordinator.presentInbox()
+    }
+
+    func openControlCenter(_ section: DashboardSection = .integrations) {
+        store.selectedSection = section
+        let controller = controlCenterWindowController ?? ControlCenterWindowController(
+            store: store,
+            phase10: phase10,
+            settings: settingsState
+        )
+        controlCenterWindowController = controller
+        controller.show()
+        Task { await store.refreshSelectedOperations() }
+    }
+
+    func application(_: NSApplication, open urls: [URL]) {
+        for url in urls {
+            store.handleNavigationCallback(url)
+        }
     }
 
     #if DEBUG
@@ -143,58 +214,22 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func updateHotKey(_ value: GlobalHotKeySetting) {
+        settingsState.hotKey = value
         hotKeyPreferences.save(value)
         hotKeyController?.update(value)
     }
 
     func updateNotifications(_ value: MacNotificationPreferences) {
+        settingsState.notifications = value
         notificationPreferences.save(value)
-        notificationCoordinator.updatePreferences(value)
+        Task { await notificationCoordinator.updatePreferences(value) }
         panelCoordinator?.updateNotificationPreferences(value)
     }
-}
 
-private struct MacLocalSettingsView: View {
-    @State private var selection: GlobalHotKeySetting
-    @State private var notifications: MacNotificationPreferences
-    let onHotKeyChange: (GlobalHotKeySetting) -> Void
-    let onNotificationChange: (MacNotificationPreferences) -> Void
-
-    init(
-        preferences: GlobalHotKeyPreferences,
-        notificationStore: MacNotificationPreferencesStore,
-        onHotKeyChange: @escaping (GlobalHotKeySetting) -> Void,
-        onNotificationChange: @escaping (MacNotificationPreferences) -> Void
-    ) {
-        _selection = State(initialValue: preferences.load())
-        _notifications = State(initialValue: notificationStore.load())
-        self.onHotKeyChange = onHotKeyChange
-        self.onNotificationChange = onNotificationChange
-    }
-
-    var body: some View {
-        Form {
-            Picker("settings.hotkey", selection: $selection) {
-                Text("settings.hotkey.controlOptionSpace").tag(GlobalHotKeySetting.controlOptionSpace)
-                Text("settings.hotkey.commandShiftA").tag(GlobalHotKeySetting.commandShiftA)
-            }
-            .onChange(of: selection) { _, value in onHotKeyChange(value) }
-            Section("Notifications") {
-                Toggle("Enabled", isOn: $notifications.enabled)
-                Toggle("Sounds", isOn: $notifications.soundEnabled)
-                Toggle("Approvals and questions", isOn: $notifications.decisionNotificationsEnabled)
-                Toggle("Completed sessions", isOn: $notifications.completedNotificationsEnabled)
-                Toggle("Failed sessions", isOn: $notifications.failedNotificationsEnabled)
-                Toggle("Long-running and idle", isOn: $notifications.longRunningIdleNotificationsEnabled)
-                Picker("Privacy", selection: $notifications.privacyLevel) {
-                    Text("Generic").tag(NotificationPrivacyLevel.generic)
-                    Text("Project and event").tag(NotificationPrivacyLevel.projectAndEvent)
-                }
-            }
-            .onChange(of: notifications) { _, value in onNotificationChange(value) }
-        }
-        .padding()
-        .frame(width: 420)
+    func updateApplicationPreferences(_ value: MacLocalPreferences) {
+        settingsState.application = value
+        applicationPreferences.save(value)
+        panelCoordinator?.updateApplicationPreferences(value)
     }
 }
 
@@ -215,14 +250,16 @@ private struct MenuBarLabel: View {
                     .offset(x: 2, y: -1)
             }
         }
-            .accessibilityLabel(store.pendingDecisions.isEmpty ? "menu.status.normal" : "menu.status.attention")
+        .accessibilityLabel(store.pendingDecisions.isEmpty ? "menu.status.normal" : "menu.status.attention")
     }
 }
 
 private struct MenuBarContent: View {
     let store: AgentControlStore
+    @Bindable var settings: MacSettingsState
     let togglePanel: () -> Void
-    @Environment(\.openWindow) private var openWindow
+    let openControlCenter: () -> Void
+    let updateNotifications: (MacNotificationPreferences) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -253,36 +290,48 @@ private struct MenuBarContent: View {
             ForEach(Array(store.attentionSessions.prefix(5))) { session in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.projectName).font(.callout.bold())
-                    Text("\(session.adapterID.rawValue) · \(session.state.rawValue)")
+                    Text(session.adapterID.rawValue)
+                        + Text(" · ")
+                        + Text(LocalizedStringKey(NotchPanelFormatting.stateTitleKey(session.state)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
             }
             ForEach(Array(store.pendingDecisions.prefix(5)), id: \.requestID) { decision in
-                let canResolveInline = DecisionAvailability.evaluate(decision) == .actionable
-                    && (decision.kind == .approval || decision.kind == .plan)
-                HStack {
-                    Text(decision.projectName ?? "Agent")
-                    Spacer()
-                    if canResolveInline {
-                        Button("Approve") { Task { _ = await store.resolve(decision, as: .approve) } }
-                        Button("Deny") { Task { _ = await store.resolve(decision, as: .deny) } }
-                    }
-                }
+                Label(decision.projectName ?? String(localized: "menu.agent"), systemImage: "exclamationmark.shield")
+                    .foregroundStyle(.orange)
+                    .accessibilityElement(children: .combine)
             }
-            Button("menu.openDashboard") {
-                openWindow(id: "dashboard")
-                NSApplication.shared.activate(ignoringOtherApps: true)
-            }
-            .keyboardShortcut("o")
             Button("menu.togglePanel", action: togglePanel)
                 .keyboardShortcut(.space, modifiers: [.control, .option])
+                .accessibilityIdentifier("menu.togglePanel")
+            Button("menu.openControlCenter", action: openControlCenter)
+                .keyboardShortcut("o")
+                .accessibilityIdentifier("menu.openControlCenter")
+            SettingsLink {
+                Label("menu.settings", systemImage: "gearshape")
+            }
+            .accessibilityIdentifier("menu.openSettings")
+            Button(action: toggleSound) {
+                Label(
+                    settings.notifications.soundEnabled ? "settings.sound.on" : "settings.sound.off",
+                    systemImage: settings.notifications.soundEnabled ? "speaker.wave.2" : "speaker.slash"
+                )
+            }
+            .accessibilityIdentifier("menu.toggleSound")
             Divider()
             Button("menu.quit") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         }
         .padding(12)
         .frame(width: 280)
+    }
+
+    private func toggleSound() {
+        var value = settings.notifications
+        value.soundEnabled.toggle()
+        settings.notifications = value
+        updateNotifications(value)
     }
 }

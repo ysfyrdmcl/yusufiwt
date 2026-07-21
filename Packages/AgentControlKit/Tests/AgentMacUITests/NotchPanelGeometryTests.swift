@@ -7,18 +7,18 @@ import Testing
 struct NotchPanelGeometryTests {
     @Test("Elapsed time is compact and stable for the notch surface")
     func elapsedFormatting() {
-        let start = Date(timeIntervalSince1970: 1_000)
+        let start = Date(timeIntervalSince1970: 1000)
         #expect(NotchPanelFormatting.elapsed(from: start, to: start.addingTimeInterval(12)) == "<1m")
         #expect(NotchPanelFormatting.elapsed(from: start, to: start.addingTimeInterval(65)) == "1m")
-        #expect(NotchPanelFormatting.elapsed(from: start, to: start.addingTimeInterval(3_900)) == "1h 5m")
-        #expect(NotchPanelFormatting.elapsed(from: start, to: start.addingTimeInterval(93_600)) == "1d 2h")
+        #expect(NotchPanelFormatting.elapsed(from: start, to: start.addingTimeInterval(3900)) == "1h 5m")
+        #expect(NotchPanelFormatting.elapsed(from: start, to: start.addingTimeInterval(93600)) == "1d 2h")
     }
 
-    @Test("Live states use human-readable labels")
+    @Test("Live states use localized presentation keys")
     func stateTitles() {
-        #expect(NotchPanelFormatting.stateTitle(.thinking) == "Thinking")
-        #expect(NotchPanelFormatting.stateTitle(.executing) == "Working")
-        #expect(NotchPanelFormatting.stateTitle(.waitingApproval) == "Approval needed")
+        #expect(NotchPanelFormatting.stateTitleKey(.thinking) == "status.thinking")
+        #expect(NotchPanelFormatting.stateTitleKey(.executing) == "status.executing")
+        #expect(NotchPanelFormatting.stateTitleKey(.waitingApproval) == "status.waitingApproval")
     }
 
     @Test("Older helper snapshots remain decodable without a start date")

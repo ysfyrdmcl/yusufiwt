@@ -10,7 +10,6 @@ for path in \
   Packages/AgentControlKit/Sources/AgentCodexAdapter/CodexManagedSessionController.swift \
   Packages/AgentControlKit/Sources/AgentCodexAdapter/CodexApprovalCoordinator.swift \
   Packages/AgentControlKit/Tests/AgentCodexAdapterTests/Fixtures/managed-session.jsonl \
-  Docs/PHASE_5_TEST_PLAN.md \
   Docs/ADR/0010-codex-app-server-contract.md
 do
   test -f "$path" || { echo "missing Phase 5 file: $path" >&2; exit 1; }

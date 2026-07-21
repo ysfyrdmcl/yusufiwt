@@ -3,6 +3,8 @@
     import AgentPersistence
     import Foundation
 
+    // The helper keeps request routing in one authority boundary.
+    // swiftlint:disable:next type_body_length
     public actor HelperRuntime {
         private let database: DatabaseActor
         private let registry: SessionRegistryActor
@@ -40,6 +42,8 @@
             await registry.notifications()
         }
 
+        // Protocol routing is exhaustive so unsupported requests fail neutrally.
+        // swiftlint:disable:next cyclomatic_complexity
         public func handle(_ request: HelperRequest) async -> HelperResponse {
             if shuttingDown {
                 return .neutral(reason: .shuttingDown)
@@ -49,6 +53,11 @@
                     return response
                 }
                 switch request {
+                case let .negotiateProtocol(supportedVersions):
+                    guard let version = LocalIPCContract.negotiate(supportedVersions: supportedVersions) else {
+                        return .neutral(reason: .unsupportedProtocol)
+                    }
+                    return .protocolNegotiated(version: version)
                 case let .negotiate(supportedVersions):
                     guard supportedVersions.contains(LocalIPCContract.currentVersion) else {
                         return .neutral(reason: .unsupportedProtocol)
@@ -60,8 +69,11 @@
                     heartbeatSequence &+= 1
                     return .heartbeat(HelperHeartbeat(sequence: heartbeatSequence, emittedAt: now()))
                 case let .submitEvent(submission):
-                    return try await .eventAccepted(registry.ingest(submission))
-                case .requestDecision, .pendingDecisions, .resolveDecision, .listSessions, .sessionSnapshot,
+                    let disposition = try await registry.ingest(submission)
+                    await observeDecisionStatus(in: submission)
+                    return .eventAccepted(disposition)
+                case .requestDecision, .pendingDecisions, .decisionLifecycles, .resolveDecision,
+                     .listSessions, .sessionSnapshot,
                      .sessionEvents, .history, .analytics, .listRules, .upsertRule, .deleteRule,
                      .activeAlerts, .privacySettings, .savePrivacySettings, .diagnostics, .repair,
                      .deleteCompletedHistory:
@@ -94,11 +106,12 @@
                             metadata: JSONEncoder().encode(["ruleID": ruleID.uuidString.lowercased()]),
                             createdAt: now()
                         ))
-                        return .decision(HookDecisionResult(
+                        let result = await decisions.recordAutomaticResolution(.approve, for: decisionRequest)
+                        try await persistDecisionStatus(
                             requestID: decisionRequest.requestID,
-                            revision: decisionRequest.revision,
-                            decision: .approve
-                        ))
+                            status: .sentToProvider
+                        )
+                        return .decision(result)
                     case .requireHuman:
                         break
                     }
@@ -106,8 +119,25 @@
                 return await decisions.wait(for: decisionRequest)
             case .pendingDecisions:
                 return await .pendingDecisions(decisions.pending())
+            case .decisionLifecycles:
+                return await .decisionLifecycles(decisions.lifecycles())
             case let .resolveDecision(resolution):
-                return await .decisionResolution(decisions.resolve(resolution))
+                let disposition = await decisions.resolve(resolution)
+                if disposition == .accepted {
+                    try await persistDecisionStatus(requestID: resolution.requestID, status: .sentToProvider)
+                    try await database.appendAudit(AuditEntry(
+                        id: UUID(),
+                        category: "decision",
+                        action: "resolved.user",
+                        targetID: resolution.requestID.uuidString.lowercased(),
+                        metadata: JSONEncoder().encode([
+                            "revision": String(resolution.revision),
+                            "outcome": Self.safeOutcome(resolution.decision)
+                        ]),
+                        createdAt: now()
+                    ))
+                }
+                return .decisionResolution(disposition)
             case let .listSessions(limit):
                 return try await .sessionList(database.sessions(limit: limit))
             case let .sessionSnapshot(id):
@@ -177,6 +207,51 @@
                 return try await .dataDeletion(database.deleteCompletedHistory(endedBefore: cutoff))
             default:
                 return nil
+            }
+        }
+
+        private func persistDecisionStatus(requestID: UUID, status: ApprovalStatus) async throws {
+            guard let submission = await decisions.statusSubmission(requestID: requestID, status: status, at: now()) else {
+                return
+            }
+            _ = try await registry.ingest(submission)
+        }
+
+        private func observeDecisionStatus(in submission: HelperEventSubmission) async {
+            let envelope = submission.envelope
+            guard envelope.eventType == "approval.statusChanged"
+                || envelope.eventType == "decision.statusChanged",
+                let rawID = envelope.payload["id"]?.stringValue,
+                let requestID = UUID(uuidString: rawID),
+                let rawStatus = envelope.payload["status"]?.stringValue,
+                let status = ApprovalStatus(rawValue: rawStatus)
+            else { return }
+            let revision: Int64? = if case let .number(value)? = envelope.payload["revision"],
+                                      value.rounded() == value {
+                Int64(value)
+            } else {
+                nil
+            }
+            await decisions.observeProviderStatus(requestID: requestID, revision: revision, status: status)
+            if [.providerAcknowledged, .applied, .deniedApplied, .providerRejected, .cancelledByProvider,
+                .expired, .superseded].contains(status) {
+                try? await database.appendAudit(AuditEntry(
+                    id: UUID(),
+                    category: "provider",
+                    action: "decision.\(status.rawValue)",
+                    targetID: requestID.uuidString.lowercased(),
+                    metadata: JSONEncoder().encode(["revision": revision.map(String.init) ?? "unknown"]),
+                    createdAt: now()
+                ))
+            }
+        }
+
+        private static func safeOutcome(_ decision: HookDecision) -> String {
+            switch decision {
+            case .approve: "approve"
+            case .deny: "deny"
+            case .answerChoice, .answerChoices, .answerText, .confirm: "answer"
+            case .requestPlanChanges: "requestPlanChanges"
             }
         }
 

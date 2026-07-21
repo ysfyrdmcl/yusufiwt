@@ -38,6 +38,12 @@ struct SchemaContractTests {
         #expect(indexes.contains("idx_events_session_sequence"))
         #expect(indexes.contains("idx_sessions_state_activity"))
         #expect(indexes.contains("idx_approvals_pending"))
+
+        let sessionColumns = try Set(connection.query("PRAGMA table_info(agent_sessions)").compactMap { row -> String? in
+            guard row.count > 1, case let .text(value) = row[1] else { return nil }
+            return value
+        })
+        #expect(sessionColumns.contains("usage_metrics"))
     }
 
     @Test("Database-level triggers keep audit history append-only")

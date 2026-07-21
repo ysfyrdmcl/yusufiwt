@@ -56,12 +56,19 @@ public struct RiskClassifier: Sendable {
 
     private func classify(_ command: ParsedCommand, level: inout RiskLevel, reasons: inout [String]) {
         let executable = command.executable.lastPathComponent.lowercased()
-        if executable == "sudo" || executable == "su" {
+        let joined = command.arguments.joined(separator: " ").lowercased()
+        let words = Set(([executable] + command.arguments).flatMap { value in
+            value.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        })
+        if executable == "sudo" || executable == "su" || words.contains("sudo") || words.contains("su") {
             level = .critical
             reasons.append("privilegeEscalation")
         }
-        let joined = command.arguments.joined(separator: " ").lowercased()
-        if executable == "rm", joined.contains("-rf") || joined.contains("-fr") {
+        let invokesRemove = executable == "rm" || words.contains("rm")
+        let recursivelyDeletes = joined.contains("-rf") || joined.contains("-fr")
+            || joined.contains("--recursive")
+            || (joined.contains(" -r ") && joined.contains(" -f "))
+        if invokesRemove, recursivelyDeletes {
             level = .critical
             reasons.append("recursiveDelete")
         }

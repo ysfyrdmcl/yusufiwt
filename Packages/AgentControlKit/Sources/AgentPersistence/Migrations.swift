@@ -19,7 +19,7 @@ public struct DatabaseMigration: Sendable, Equatable {
 }
 
 public enum AgentControlMigrations {
-    public static let all: [DatabaseMigration] = [initialSchema, phase9Indexes]
+    public static let all: [DatabaseMigration] = [initialSchema, phase9Indexes, sessionUsageSnapshot]
 
     public static let initialSchema = DatabaseMigration(
         version: 1,
@@ -250,6 +250,14 @@ public enum AgentControlMigrations {
             "CREATE INDEX idx_events_type_received ON session_events(event_type, received_at)",
             "CREATE INDEX idx_rules_enabled_updated ON rules(enabled, updated_at DESC)",
             "CREATE INDEX idx_diagnostics_resolution ON diagnostic_incidents(resolved_at, opened_at DESC)"
+        ]
+    )
+
+    public static let sessionUsageSnapshot = DatabaseMigration(
+        version: 3,
+        name: "session_usage_snapshot",
+        statements: [
+            "ALTER TABLE agent_sessions ADD COLUMN usage_metrics BLOB"
         ]
     )
 }

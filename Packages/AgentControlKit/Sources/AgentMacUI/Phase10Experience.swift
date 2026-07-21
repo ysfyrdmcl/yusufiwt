@@ -2,6 +2,7 @@
     import AgentDomain
     import AgentHookKit
     import AgentLocalIPC
+    import AgentPersistence
     import AgentProtocol
     import AppKit
     import Foundation
@@ -23,8 +24,15 @@
         case verification
     }
 
+    public enum Phase10Message: Sendable, Equatable {
+        case localized(String)
+        case verbatim(String)
+    }
+
     @MainActor
     @Observable
+    // The coordinator intentionally owns the full ordered onboarding transaction.
+    // swiftlint:disable:next type_body_length
     public final class Phase10Coordinator {
         public var isOnboardingPresented: Bool
         public var onboardingStep: OnboardingStep
@@ -34,7 +42,7 @@
         public private(set) var detectedTerminals: [TerminalApplication] = []
         public private(set) var previews: [HookProvider: ManagedConfigPreview] = [:]
         public private(set) var busy = false
-        public private(set) var message: String?
+        public private(set) var message: Phase10Message?
         public private(set) var helperState: LaunchAgentState = .notRegistered
         public private(set) var notificationState: NotificationAuthorizationState = .unknown
         public private(set) var accessibilityEnabled = false
@@ -182,20 +190,27 @@
 
         public func verifyTestEvent() async {
             await perform {
-                self.testEventSucceeded = try await Self.emitTestEvent()
+                self.testEventSucceeded = try await Self.emitTestEvent(adapterID: AdapterID("agentcontrol-test"))
                 guard self.testEventSucceeded else {
-                    self.message = "The helper did not acknowledge the test event. You can continue in monitor-only mode."
+                    self.message = .localized("onboarding.verify.notAcknowledgedMonitorOnly")
                     return
                 }
                 self.complete()
             }
         }
 
-        public func testIntegration() async {
+        public func testIntegration(_ provider: HookProvider) async {
             await perform {
-                self.testEventSucceeded = try await Self.emitTestEvent()
+                let records = await self.integrationManager.scan()
+                self.integrations = records
+                guard records.first(where: { $0.provider == provider })?.state == .healthy else {
+                    self.testEventSucceeded = false
+                    self.message = .localized("integrations.test.installOrRepairFirst")
+                    return
+                }
+                self.testEventSucceeded = try await Self.emitProviderTestEvent(provider)
                 if !self.testEventSucceeded {
-                    self.message = "The helper did not acknowledge the test event."
+                    self.message = .localized("integrations.test.notAcknowledged")
                 }
             }
         }
@@ -230,13 +245,13 @@
             do {
                 try await operation()
             } catch is CancellationError {
-                message = "Operation cancelled; configuration was not partially installed."
+                message = .localized("integrations.operation.cancelled")
             } catch {
-                message = String(describing: error)
+                message = .verbatim(RedactedDiagnosticExporter.sanitize(String(describing: error)))
             }
         }
 
-        private static func emitTestEvent() async throws -> Bool {
+        private static func emitTestEvent(adapterID: AdapterID) async throws -> Bool {
             let now = Date()
             let sessionID = SessionID(UUID())
             let nodeID = NodeID(UUID())
@@ -248,8 +263,8 @@
             let session = AgentSession(
                 id: sessionID,
                 nodeID: nodeID,
-                adapterID: AdapterID("agentcontrol-test"),
-                externalSessionID: "onboarding-test",
+                adapterID: adapterID,
+                externalSessionID: "integration-self-test-\(adapterID.rawValue)",
                 project: project,
                 terminalContext: nil,
                 parentSessionID: nil,
@@ -283,6 +298,35 @@
                 return disposition != .spooled && disposition != .rejectedTransition
             }
             return false
+        }
+
+        private static func emitProviderTestEvent(_ provider: HookProvider) async throws -> Bool {
+            let eventName = provider == .cursor ? "sessionStart" : "SessionStart"
+            let token = "integration-self-test-\(provider.rawValue)-\(UUID().uuidString.lowercased())"
+            let mapping = try ProviderHookMapper().map(
+                provider: provider,
+                input: .object([
+                    "hook_event_name": .string(eventName),
+                    "session_id": .string(token),
+                    "conversation_id": .string(token),
+                    "cwd": .string("/private/tmp"),
+                    "workspace_roots": .array([.string("/private/tmp")])
+                ]),
+                environment: ["AGENTCONTROL_PROVIDER_VERSION": "1.0.0", "PWD": "/private/tmp"]
+            )
+            let paths = try AgentControlPaths.userDefault()
+            let client = AgentControlHookClient(configuration: HookConfiguration(
+                socketURL: paths.socketURL,
+                spoolDirectory: paths.spoolDirectory,
+                statusTimeoutMilliseconds: 1000
+            ))
+            for submission in mapping.submissions {
+                guard case let .eventAccepted(disposition) = await client.emit(submission, notification: true),
+                      disposition != .spooled,
+                      disposition != .rejectedTransition
+                else { return false }
+            }
+            return true
         }
 
         private enum Keys {

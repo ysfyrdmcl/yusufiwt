@@ -1,8 +1,11 @@
 #if os(macOS)
     import AgentDomain
     import AgentLocalIPC
+    import AgentPersistence
     import SwiftUI
 
+    // DecisionRow keeps every decision kind in one accessibility container.
+    // swiftlint:disable:next type_body_length
     public struct DecisionRow: View {
         let store: AgentControlStore
         let decision: PendingHookDecision
@@ -27,6 +30,11 @@
                             RiskBadge(risk: risk.level)
                         }
                     }
+                    if let provider = presentation.provider, let project = presentation.project {
+                        Text("\(provider.capitalized) · \(project)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if let header = decision.question?.header, !header.isEmpty {
                         Text(header)
                             .font(.caption.bold())
@@ -46,9 +54,27 @@
                         VStack(alignment: .leading, spacing: 3) {
                             Text("decision.riskReasons").font(.caption.bold())
                             ForEach(presentation.riskReasons, id: \.self) { reason in
-                                Label(reason, systemImage: "exclamationmark.circle")
+                                Label(RiskReasonCopy.title(reason), systemImage: "exclamationmark.circle")
                                     .font(.caption)
                             }
+                        }
+                    }
+                    if !presentation.expectedEffects.isEmpty {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("decision.expectedEffects").font(.caption.bold())
+                            ForEach(presentation.expectedEffects, id: \.self) { effect in
+                                Label(effect, systemImage: "internaldrive")
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    if let command = presentation.redactedCommand {
+                        DisclosureGroup("decision.commandDetails") {
+                            Text(command)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 4)
                         }
                     }
                     expiryLabel(availability: availability)
@@ -58,7 +84,10 @@
                     }
                 }
                 .padding(.vertical, AgentControlSpacing.compact)
+                .contentShape(Rectangle())
+                .onTapGesture { store.selectDecision(decision.requestID) }
                 .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("decision.row.\(decision.requestID.uuidString.lowercased())")
             }
         }
 
@@ -89,13 +118,16 @@
                     Task { _ = await store.resolve(decision, as: .deny) }
                 }
                 .keyboardShortcut(.cancelAction)
+                .accessibilityIdentifier("decision.deny")
                 Button("action.openTerminal") { store.openTerminal(for: decision) }
+                    .accessibilityIdentifier("decision.openTerminal")
                 Spacer()
                 Button("action.approve") {
                     Task { _ = await store.resolve(decision, as: .approve) }
                 }
-                .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier("decision.approveOnce")
             }
+            .disabled(isResolving)
         }
 
         @ViewBuilder
@@ -161,7 +193,6 @@
                     Button("action.confirm") {
                         Task { _ = await store.resolve(decision, as: .confirm(true)) }
                     }
-                    .keyboardShortcut(.defaultAction)
                 }
             case .freeText, .none:
                 HStack {
@@ -190,23 +221,36 @@
 
         private var planControls: some View {
             VStack(alignment: .trailing) {
-                TextField("decision.requestChangesPlaceholder", text: $answer)
-                    .textFieldStyle(.roundedBorder)
+                if decision.planChangesSupported == true {
+                    TextField("decision.requestChangesPlaceholder", text: $answer)
+                        .textFieldStyle(.roundedBorder)
+                }
                 HStack {
                     Button("action.deny", role: .destructive) {
                         Task { _ = await store.resolve(decision, as: .deny) }
                     }
                     Spacer()
-                    Button("action.requestChanges") {
-                        let value = answer.trimmingCharacters(in: .whitespacesAndNewlines)
-                        Task { _ = await store.resolve(decision, as: .requestPlanChanges(value)) }
+                    if decision.planChangesSupported == true {
+                        Button("action.requestChanges") {
+                            let value = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+                            Task { _ = await store.resolve(decision, as: .requestPlanChanges(value)) }
+                        }
+                        .disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
-                    .disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     Button("action.acceptPlan") {
                         Task { _ = await store.resolve(decision, as: .approve) }
                     }
-                    .keyboardShortcut(.defaultAction)
                 }
+            }
+            .disabled(isResolving)
+        }
+
+        private var isResolving: Bool {
+            switch store.acknowledgmentStatuses[decision.requestID] {
+            case .sending, .sentToProvider, .automaticallySentToProvider, .providerAcknowledged:
+                true
+            default:
+                false
             }
         }
 
@@ -245,13 +289,38 @@
         }
     }
 
+    private enum RiskReasonCopy {
+        private static let titleKeys: [String: String.LocalizationValue] = [
+            "privilegeEscalation": "decision.risk.privilegeEscalation",
+            "recursiveDelete": "decision.risk.recursiveDelete",
+            "shellComposition": "decision.risk.shellComposition",
+            "outsideWorkspace": "decision.risk.outsideWorkspace",
+            "outsideWorkspaceWrite": "decision.risk.outsideWorkspace",
+            "secretPath": "decision.risk.secretPath",
+            "fileDeletion": "decision.risk.fileDeletion",
+            "networkAccess": "decision.risk.networkAccess",
+            "networkTool": "decision.risk.networkAccess",
+            "pipeline": "decision.risk.pipeline",
+            "redirection": "decision.risk.redirection",
+            "subshell": "decision.risk.subshell",
+            "workspace-write": "decision.risk.workspaceWrite"
+        ]
+
+        static func title(_ reason: String) -> String {
+            let key = titleKeys[reason]
+            guard let key else { return RedactedDiagnosticExporter.sanitize(reason) }
+            return String(localized: key)
+        }
+    }
+
     private struct AcknowledgmentLabel: View {
         let status: LocalAcknowledgmentStatus
 
         var body: some View {
             Label(status.titleKey, systemImage: status.symbol)
                 .font(.caption)
-                .foregroundStyle(status == .sentToProvider ? Color.secondary : Color.orange)
+                .foregroundStyle(status == .sentToProvider || status == .automaticallySentToProvider
+                    || status == .providerAcknowledged ? Color.secondary : Color.orange)
         }
     }
 
@@ -278,7 +347,12 @@
             switch self {
             case .sending: "decision.status.sending"
             case .sentToProvider: "decision.status.sent"
+            case .automaticallySentToProvider: "decision.status.sent"
+            case .providerAcknowledged: "decision.status.sent"
+            case .applied: "decision.status.applied"
+            case .deniedApplied: "decision.status.deniedApplied"
             case .expired: "decision.status.expired"
+            case .cancelled: "decision.status.cancelled"
             case .superseded: "decision.status.superseded"
             case .rejected: "decision.status.rejected"
             case .failed: "decision.status.failed"
@@ -289,7 +363,12 @@
             switch self {
             case .sending: "arrow.up.circle"
             case .sentToProvider: "paperplane"
+            case .automaticallySentToProvider: "bolt.badge.checkmark"
+            case .providerAcknowledged: "checkmark.circle"
+            case .applied: "checkmark.seal"
+            case .deniedApplied: "hand.raised.fill"
             case .expired: "clock.badge.xmark"
+            case .cancelled: "xmark.circle"
             case .superseded: "arrow.triangle.2.circlepath"
             case .rejected: "hand.raised"
             case .failed: "exclamationmark.triangle"

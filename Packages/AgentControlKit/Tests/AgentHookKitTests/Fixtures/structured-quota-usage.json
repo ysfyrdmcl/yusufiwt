@@ -1,0 +1,1 @@
+{"session_id":"structured-quota-session","cwd":"/private/tmp/work","hook_event_name":"Status","timestamp":"2026-07-19T10:00:00Z","rate_limit":{"remaining_percent":73},"usage":{"input_tokens":1200,"output_tokens":300,"total_tokens":1500}}

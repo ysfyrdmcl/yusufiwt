@@ -4,13 +4,55 @@
     import AgentProtocol
     import Foundation
 
+    // IPC DTOs stay together so wire compatibility is auditable in one place.
+    // swiftlint:disable file_length
+    public struct LocalIPCVersion: Codable, Comparable, Hashable, Sendable {
+        public let major: UInt16
+        public let minor: UInt16
+
+        public init(major: UInt16, minor: UInt16 = 0) {
+            self.major = major
+            self.minor = minor
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case major, minor
+        }
+
+        public init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            major = try values.decode(UInt16.self, forKey: .major)
+            // A version emitted before minor negotiation existed means major.0.
+            minor = try values.decodeIfPresent(UInt16.self, forKey: .minor) ?? 0
+        }
+
+        public static func < (lhs: Self, rhs: Self) -> Bool {
+            lhs.major == rhs.major ? lhs.minor < rhs.minor : lhs.major < rhs.major
+        }
+    }
+
     public enum LocalIPCContract {
-        // Phase 9 only adds request/response enum cases; all existing encoded
-        // messages remain byte-compatible, so the negotiated major stays at 1.
-        public static let currentVersion: UInt16 = 1
+        // Additive DTO fields advance the minor while the ACIP frame and legacy
+        // negotiation continue to use the byte-compatible major version.
+        public static let current = LocalIPCVersion(major: 1, minor: 1)
+        public static let currentMajorVersion = current.major
+        public static let currentMinorVersion = current.minor
+        public static let supportedVersions = [current]
+        public static let currentVersion = currentMajorVersion
         public static let maximumFrameSize = 1_048_576
         public static let magic = Data([0x41, 0x43, 0x49, 0x50]) // ACIP
         public static let machServiceName = "com.yusuf.agentcontrol.helper.xpc"
+
+        public static func negotiate(supportedVersions offered: [LocalIPCVersion]) -> LocalIPCVersion? {
+            offered
+                .filter { $0.major == currentMajorVersion }
+                .map { LocalIPCVersion(major: currentMajorVersion, minor: min($0.minor, currentMinorVersion)) }
+                .max()
+        }
+
+        public static func supports(_ version: LocalIPCVersion) -> Bool {
+            version.major == currentMajorVersion && version.minor <= currentMinorVersion
+        }
     }
 
     public enum LocalIPCError: Error, Sendable, Equatable, CustomStringConvertible {
@@ -69,12 +111,14 @@
     }
 
     public enum HelperRequest: Codable, Sendable {
+        case negotiateProtocol(supportedVersions: [LocalIPCVersion])
         case negotiate(supportedVersions: [UInt16])
         case health
         case heartbeat
         case submitEvent(HelperEventSubmission)
         case requestDecision(HookDecisionRequest)
         case pendingDecisions
+        case decisionLifecycles
         case resolveDecision(HookDecisionResolution)
         case listSessions(limit: Int)
         case sessionSnapshot(SessionID)
@@ -94,12 +138,14 @@
     }
 
     public enum HelperResponse: Codable, Sendable, Equatable {
+        case protocolNegotiated(version: LocalIPCVersion)
         case negotiated(version: UInt16)
         case health(HelperHealth)
         case heartbeat(HelperHeartbeat)
         case eventAccepted(EventAppendDisposition)
         case decision(HookDecisionResult)
         case pendingDecisions([PendingHookDecision])
+        case decisionLifecycles([DecisionLifecycleSnapshot])
         case decisionResolution(DecisionResolutionDisposition)
         case sessionList([SessionListItem])
         case sessionSnapshot(AgentSession?)
@@ -268,6 +314,8 @@
         public let approval: ApprovalRequest?
         public let question: AgentQuestion?
         public let planTitle: String?
+        public let planChangesSupported: Bool?
+        public let provider: String?
 
         public init(request: HookDecisionRequest) {
             requestID = request.requestID
@@ -291,9 +339,16 @@
                 : nil
             if request.kind == .plan {
                 planTitle = submission.envelope.payload["title"]?.stringValue ?? request.prompt
+                if case let .bool(value)? = submission.envelope.payload["allowsPlanChanges"] {
+                    planChangesSupported = value
+                } else {
+                    planChangesSupported = nil
+                }
             } else {
                 planTitle = nil
+                planChangesSupported = nil
             }
+            provider = submission.initialSession.adapterID.rawValue
         }
 
         private static func decode<T: Decodable>(_ type: T.Type, from payload: JSONValue) -> T? {
@@ -308,6 +363,80 @@
         case revisionMismatch
         case expired
         case invalidDecision
+    }
+
+    public enum DecisionResolutionSource: String, Codable, Sendable, Equatable {
+        case user
+        case automation
+    }
+
+    /// Helper-owned lifecycle state. A local decision is deliberately distinct from
+    /// provider application so UI surfaces cannot report success before an ack event.
+    public enum DecisionLifecycleState: String, Codable, Sendable, Equatable {
+        case awaitingUser
+        case userResolvedAwaitingProviderAck
+        case automaticallyResolvedAwaitingProviderAck
+        case providerAcknowledged
+        case applied
+        case deniedApplied
+        case expired
+        case cancelled
+        case superseded
+        case providerRejected
+
+        public var isActionable: Bool {
+            self == .awaitingUser
+        }
+
+        public var isFinal: Bool {
+            switch self {
+            case .applied, .deniedApplied, .expired, .cancelled, .superseded, .providerRejected:
+                true
+            case .awaitingUser, .userResolvedAwaitingProviderAck,
+                 .automaticallyResolvedAwaitingProviderAck, .providerAcknowledged:
+                false
+            }
+        }
+    }
+
+    public struct DecisionLifecycleSnapshot: Codable, Sendable, Equatable {
+        public let requestID: UUID
+        public let sessionID: SessionID
+        public let revision: Int64
+        public let kind: HookDecisionKind
+        public let provider: String?
+        public let projectName: String?
+        public let state: DecisionLifecycleState
+        public let resolutionSource: DecisionResolutionSource?
+        public let decision: HookDecision?
+        public let expiresAt: Date?
+        public let updatedAt: Date
+
+        public init(
+            requestID: UUID,
+            sessionID: SessionID,
+            revision: Int64,
+            kind: HookDecisionKind,
+            provider: String? = nil,
+            projectName: String? = nil,
+            state: DecisionLifecycleState,
+            resolutionSource: DecisionResolutionSource? = nil,
+            decision: HookDecision? = nil,
+            expiresAt: Date? = nil,
+            updatedAt: Date
+        ) {
+            self.requestID = requestID
+            self.sessionID = sessionID
+            self.revision = revision
+            self.kind = kind
+            self.provider = provider
+            self.projectName = projectName
+            self.state = state
+            self.resolutionSource = resolutionSource
+            self.decision = decision
+            self.expiresAt = expiresAt
+            self.updatedAt = updatedAt
+        }
     }
 
     public enum EventAppendDisposition: String, Codable, Sendable, Equatable {

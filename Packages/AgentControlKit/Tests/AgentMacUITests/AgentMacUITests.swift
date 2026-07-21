@@ -6,7 +6,8 @@ import AgentProtocol
 import Foundation
 import Testing
 
-// swiftlint:disable type_body_length
+// This serialized integration suite intentionally keeps its shared fixture transport in one file.
+// swiftlint:disable file_length type_body_length
 @Suite("Phase 7 macOS UI", .serialized)
 struct AgentMacUITests {
     @Test("Panel placement follows the cursor display and visible fullscreen bounds")
@@ -56,6 +57,91 @@ struct AgentMacUITests {
         await store.refreshNow()
         #expect(store.connectionState == .online)
         #expect(store.activeSessions.count == 100)
+    }
+
+    @Test("Usage follows the selected session or the latest active session")
+    @MainActor
+    func usageSessionSelection() async {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let firstID = SessionID(UUID())
+        let latestID = SessionID(UUID())
+        let first = SessionListItem(
+            id: firstID, projectName: "First", adapterID: AdapterID("codex"), state: .running,
+            startedAt: now.addingTimeInterval(-100), lastMeaningfulEventAt: now.addingTimeInterval(-10),
+            snapshotRevision: 1,
+            usageMetrics: [.init(
+                provider: AdapterID("codex"), kind: .quotaRemaining,
+                remainingPercent: 73, source: "fixture", updatedAt: now
+            )]
+        )
+        let latest = SessionListItem(
+            id: latestID, projectName: "Latest", adapterID: AdapterID("claude"), state: .running,
+            startedAt: now.addingTimeInterval(-50), lastMeaningfulEventAt: now,
+            snapshotRevision: 1,
+            usageMetrics: [.init(
+                provider: AdapterID("claude"), kind: .contextRemaining,
+                total: 1000, used: 250, source: "fixture", updatedAt: now
+            )]
+        )
+        let store = AgentControlStore(
+            transport: FixtureUITransport(sessions: [first, latest]), refreshInterval: .seconds(60)
+        )
+        await store.refreshNow()
+        #expect(store.usagePresentation(at: now).value == "75%")
+        #expect(store.usagePresentation(at: now).sourceLabel == "Claude · Latest")
+
+        store.selectSession(firstID)
+        #expect(store.usagePresentation(at: now).value == "73%")
+        #expect(store.usagePresentation(at: now).titleKey == "usage.quotaRemaining")
+        #expect(SessionUsagePresentation(session: first, at: now.addingTimeInterval(301)).isStale)
+        #expect(SessionUsagePresentation(session: SessionListItem(
+            id: SessionID(UUID()), projectName: "No usage", adapterID: AdapterID("codex"),
+            state: .running, startedAt: now, lastMeaningfulEventAt: now, snapshotRevision: 0
+        ), at: now).value == "—")
+    }
+
+    @Test("Registry notification refreshes structured usage without waiting for polling")
+    @MainActor
+    func usageNotificationRefresh() async throws {
+        let sessionID = SessionID(UUID())
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let initial = SessionListItem(
+            id: sessionID, projectName: "Usage", adapterID: AdapterID("codex"), state: .running,
+            startedAt: now, lastMeaningfulEventAt: now, snapshotRevision: 1
+        )
+        let updated = SessionListItem(
+            id: sessionID, projectName: "Usage", adapterID: AdapterID("codex"), state: .running,
+            startedAt: now, lastMeaningfulEventAt: now, snapshotRevision: 2,
+            usageMetrics: [.init(
+                provider: AdapterID("codex"), kind: .quotaRemaining,
+                remainingPercent: 73, source: "fixture", updatedAt: now
+            )]
+        )
+        let transport = FixtureUITransport(sessions: [initial])
+        let store = AgentControlStore(transport: transport, refreshInterval: .seconds(60))
+        store.start()
+        defer { store.stop() }
+
+        for _ in 0 ..< 100 {
+            if await transport.hasNotificationSubscriber() {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        await transport.setSessions([updated])
+        await transport.emitNotification(RegistryNotification(
+            sessionID: sessionID,
+            eventID: EventID(UUID()),
+            state: .running,
+            snapshotRevision: 2
+        ))
+        for _ in 0 ..< 100 {
+            if store.sessions.first?.usageMetrics.first?.remainingPercent == 73 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(store.sessions.first?.usageMetrics.first?.remainingPercent == 73)
     }
 
     @Test("Disconnect keeps the last snapshot and reconnect refreshes revisions")
@@ -181,6 +267,57 @@ struct AgentMacUITests {
         #expect(presentation.riskReasons == ["workspace-write"])
     }
 
+    @Test("xcodebuild approval is humanized without executing shell expansion")
+    func xcodebuildApprovalPresentation() {
+        let raw = """
+        xcodebuild -project yusufiwt.xcodeproj -scheme AgentControliOS -configuration Debug \
+        -sdk iphoneos -destination 'generic/platform=iOS' \
+        -derivedDataPath "$PWD/.build/BrandingiOSDerived" \
+        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+        """
+        let command = ParsedCommand(
+            executable: URL(fileURLWithPath: "/bin/zsh"),
+            arguments: ["-lc", raw.replacingOccurrences(of: "\n", with: " ")],
+            workingDirectory: URL(fileURLWithPath: "/private/tmp/fixture")
+        )
+        let pending = PendingHookDecision(request: Self.decisionRequest(command: command))
+        let presentation = DecisionPresentation(decision: pending)
+        #expect(presentation.title.contains("AgentControliOS"))
+        #expect(presentation.title.contains("Debug"))
+        #expect(presentation.detailLines.contains { $0.contains("xcodebuild") })
+        #expect(presentation.detailLines.contains { $0.contains("yusufiwt.xcodeproj") })
+        #expect(presentation.detailLines.contains { $0.contains("iphoneos") && $0.contains("generic/platform=iOS") })
+        #expect(presentation.detailLines.contains { $0.contains("BrandingiOSDerived") })
+        #expect(presentation.detailLines.contains { $0.lowercased().contains("sign") })
+        #expect(presentation.expectedEffects.contains { $0.lowercased().contains("build") })
+        #expect(presentation.redactedCommand?.contains("$PWD/.build/BrandingiOSDerived") == true)
+        #expect(!presentation.riskReasons.contains("outsideWorkspaceWrite"))
+    }
+
+    @Test("Approval command disclosure redacts credentials and user paths")
+    func credentialRedactionPresentation() {
+        let secret = "sk_fixture_1234567890abcdefghijklmnopqrstuvwxyz"
+        let passwordField = "password" + "=do-not-display"
+        let command = ParsedCommand(
+            executable: URL(fileURLWithPath: "/bin/zsh"),
+            arguments: [
+                "-lc",
+                "curl -H 'Authorization: Bearer \(secret)' "
+                    + "'https://example.invalid/run?token=\(secret)' \(passwordField) "
+                    + "/Users/private-user/project"
+            ],
+            workingDirectory: URL(fileURLWithPath: "/private/tmp/fixture")
+        )
+        let presentation = DecisionPresentation(decision: PendingHookDecision(
+            request: Self.decisionRequest(command: command)
+        ))
+        let disclosure = presentation.redactedCommand ?? ""
+        #expect(!disclosure.contains(secret))
+        #expect(!disclosure.contains("do-not-display"))
+        #expect(!disclosure.contains("private-user"))
+        #expect(disclosure.contains("[redacted]") || disclosure.contains("~/project"))
+    }
+
     @Test("Notification callbacks reject superseded, expired, secret, and duplicate actions")
     @MainActor
     func notificationResponseValidation() async {
@@ -189,6 +326,9 @@ struct AgentMacUITests {
         let transport = FixtureUITransport(sessions: [], pending: [current])
         let store = AgentControlStore(transport: transport, refreshInterval: .seconds(60))
         await store.refreshNow()
+        #expect(await store.handleNotificationResponse(.init(action: .review, requestID: requestID, revision: 2)) == .reviewed)
+        #expect(store.selectedDecisionID == requestID)
+        #expect(store.notificationRouteState == .selected(requestID))
         #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: requestID, revision: 1)) == .superseded)
         #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: requestID, revision: 2)) == .sent)
         #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: requestID, revision: 2)) == .notFound)
@@ -204,6 +344,19 @@ struct AgentMacUITests {
         await transport.setPending([secret])
         await store.refreshNow()
         #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: secretID, revision: 1)) == .rejected)
+
+        let highRiskID = UUID()
+        let highRisk = PendingHookDecision(request: Self.decisionRequest(requestID: highRiskID, risk: .high))
+        await transport.setPending([highRisk])
+        await store.refreshNow()
+        #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: highRiskID, revision: 1)) == .rejected)
+
+        let racedID = UUID()
+        let raced = PendingHookDecision(request: Self.decisionRequest(requestID: racedID))
+        await transport.setPending([raced])
+        await transport.setResolutionDisposition(.revisionMismatch)
+        await store.refreshNow()
+        #expect(await store.handleNotificationResponse(.init(action: .approve, requestID: racedID, revision: 1)) == .superseded)
     }
 
     @Test("Global hotkey defaults to Control-Option-Space and persists customization")
@@ -240,7 +393,9 @@ struct AgentMacUITests {
         revision: Int64 = 1,
         kind: HookDecisionKind = .approval,
         questionKind: QuestionKind = .freeText,
-        expiresAt: Date? = Date.distantFuture
+        expiresAt: Date? = Date.distantFuture,
+        command: ParsedCommand? = nil,
+        risk: RiskLevel = .medium
     ) -> HookDecisionRequest {
         let sessionID = SessionID(UUID())
         let nodeID = NodeID(UUID())
@@ -266,12 +421,12 @@ struct AgentMacUITests {
                 id: ApprovalRequestID(requestID),
                 sessionID: sessionID,
                 providerRequestID: "fixture",
-                action: .executeCommand(ParsedCommand(
+                action: .executeCommand(command ?? ParsedCommand(
                     executable: URL(fileURLWithPath: "/usr/bin/swift"),
                     arguments: ["test"],
                     workingDirectory: session.project.rootURL
                 )),
-                risk: RiskAssessment(level: .medium, reasons: ["workspace-write"]),
+                risk: RiskAssessment(level: risk, reasons: ["workspace-write"]),
                 createdAt: now,
                 expiresAt: expiresAt,
                 revision: revision,
@@ -326,6 +481,8 @@ private actor FixtureUITransport: AgentControlTransport {
     private var sessionItems: [SessionListItem]
     private var pending: [PendingHookDecision]
     private var decision: HookDecision?
+    private var resolutionDisposition = DecisionResolutionDisposition.accepted
+    private var notificationContinuation: AsyncStream<RegistryNotification>.Continuation?
 
     init(sessions: [SessionListItem], pending: [PendingHookDecision] = []) {
         sessionItems = sessions
@@ -344,8 +501,20 @@ private actor FixtureUITransport: AgentControlTransport {
         pending = value
     }
 
+    func setResolutionDisposition(_ value: DecisionResolutionDisposition) {
+        resolutionDisposition = value
+    }
+
     func lastDecision() -> HookDecision? {
         decision
+    }
+
+    func hasNotificationSubscriber() -> Bool {
+        notificationContinuation != nil
+    }
+
+    func emitNotification(_ value: RegistryNotification) {
+        notificationContinuation?.yield(value)
     }
 
     func snapshot(sessionLimit: Int) async throws -> AgentControlSnapshot {
@@ -377,13 +546,20 @@ private actor FixtureUITransport: AgentControlTransport {
 
     func resolve(_ resolution: HookDecisionResolution) async throws -> DecisionResolutionDisposition {
         decision = resolution.decision
-        pending.removeAll { $0.requestID == resolution.requestID }
-        return .accepted
+        if resolutionDisposition == .accepted {
+            pending.removeAll { $0.requestID == resolution.requestID }
+        }
+        return resolutionDisposition
     }
 
     func notifications() async -> AsyncStream<RegistryNotification> {
-        AsyncStream { $0.finish() }
+        AsyncStream { continuation in
+            notificationContinuation = continuation
+        }
     }
 
-    func disconnect() async {}
+    func disconnect() async {
+        notificationContinuation?.finish()
+        notificationContinuation = nil
+    }
 }

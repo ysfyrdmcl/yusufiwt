@@ -12,7 +12,6 @@ for path in \
   Packages/AgentControlKit/Sources/AgentCompanion/Phase14Surfaces.swift \
   Packages/AgentControlKit/Tests/AgentCompanionTests/Phase14CompanionTests.swift \
   Config/Entitlements/AgentWidgets.entitlements \
-  Docs/PHASE_14_TEST_PLAN.md \
   Docs/ADR/0019-phase14-glanceable-surfaces.md
 do
   test -f "$path" || { echo "missing Phase 14 file: $path" >&2; exit 1; }

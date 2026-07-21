@@ -1,1 +1,1 @@
-{"session_id":"claude-session","cwd":"/private/tmp/work","hook_event_name":"Elicitation","message":"Select a configuration","requested_schema":{"type":"string","enum":["Debug","Release"]}}
+{"session_id":"claude-session","cwd":"/private/tmp/work","hook_event_name":"Elicitation","mcp_server_name":"build-tools","elicitation_id":"elicit-configuration-1","message":"Select a configuration","mode":"form","requested_schema":{"type":"object","properties":{"configuration":{"type":"string","title":"Configuration","enum":["Debug","Release"]}},"required":["configuration"]}}

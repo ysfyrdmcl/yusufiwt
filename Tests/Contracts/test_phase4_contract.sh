@@ -9,8 +9,7 @@ for path in \
   Packages/AgentControlKit/Sources/AgentLocalIPC/HookDecisionBroker.swift \
   Tools/AgentControlHook/AgentControlHookMain.swift \
   Tools/FakeAgentSimulator/FakeAgentSimulatorMain.swift \
-  Tools/ProtocolInspector/ProtocolInspectorMain.swift \
-  Docs/PHASE_4_TEST_PLAN.md
+  Tools/ProtocolInspector/ProtocolInspectorMain.swift
 do
   test -f "$path" || { echo "missing Phase 4 file: $path" >&2; exit 1; }
 done

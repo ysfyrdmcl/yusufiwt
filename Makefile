@@ -17,6 +17,7 @@ contract-test:
 	@for script in ./Tests/Contracts/test_phase*_contract.sh; do \
 		"$$script"; \
 	done
+	./Tests/Contracts/test_mac_local_v1_contract.sh
 
 swift-test:
 	./Scripts/test_swift.sh
@@ -55,7 +56,7 @@ uninstall-mac-local:
 test-mac-local:
 	./Scripts/test_mac_local.sh
 
-verify-mac-local-v1:
+verify-mac-local-v1: package-mac-local
 	./Scripts/verify_mac_local_v1.sh
 
 clean:

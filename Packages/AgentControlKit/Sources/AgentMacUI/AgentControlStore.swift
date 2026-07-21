@@ -39,6 +39,43 @@
         case rejected
     }
 
+    public enum NotificationRouteState: Sendable, Equatable {
+        case selected(UUID)
+        case inactive(SessionID?)
+        case helperUnavailable
+    }
+
+    public struct ProviderIntegrationActivity: Sendable, Equatable {
+        public let lastEventAt: Date?
+        public let lastEventType: String?
+        public let lastDecisionAt: Date?
+        public let lastDecisionKind: HookDecisionKind?
+        public let lastDecisionState: DecisionLifecycleState?
+        public let lastProviderAcknowledgmentAt: Date?
+        public let lastProviderAcknowledgmentState: DecisionLifecycleState?
+        public let lastRedactedErrorKey: String?
+
+        public init(
+            lastEventAt: Date? = nil,
+            lastEventType: String? = nil,
+            lastDecisionAt: Date? = nil,
+            lastDecisionKind: HookDecisionKind? = nil,
+            lastDecisionState: DecisionLifecycleState? = nil,
+            lastProviderAcknowledgmentAt: Date? = nil,
+            lastProviderAcknowledgmentState: DecisionLifecycleState? = nil,
+            lastRedactedErrorKey: String? = nil
+        ) {
+            self.lastEventAt = lastEventAt
+            self.lastEventType = lastEventType
+            self.lastDecisionAt = lastDecisionAt
+            self.lastDecisionKind = lastDecisionKind
+            self.lastDecisionState = lastDecisionState
+            self.lastProviderAcknowledgmentAt = lastProviderAcknowledgmentAt
+            self.lastProviderAcknowledgmentState = lastProviderAcknowledgmentState
+            self.lastRedactedErrorKey = lastRedactedErrorKey
+        }
+    }
+
     @MainActor
     @Observable
     // The observable store intentionally centralizes the dashboard's cached read models.
@@ -47,10 +84,14 @@
         public private(set) var connectionState: HelperConnectionState = .loading
         public private(set) var sessions: [SessionListItem] = []
         public private(set) var pendingDecisions: [PendingHookDecision] = []
+        public private(set) var decisionLifecycles: [DecisionLifecycleSnapshot] = []
         public private(set) var selectedSession: AgentSession?
         public private(set) var selectedEvents: [PersistedSessionEvent] = []
         public private(set) var helperHealth: HelperHealth?
         public private(set) var acknowledgmentStatuses: [UUID: LocalAcknowledgmentStatus] = [:]
+        public private(set) var selectedDecisionID: UUID?
+        public private(set) var notificationRouteState: NotificationRouteState?
+        public private(set) var integrationActivities: [String: ProviderIntegrationActivity] = [:]
         public private(set) var historyPage = HistoryPage(items: [], totalCount: 0)
         public private(set) var analyticsSummary: AnalyticsSummary?
         public private(set) var operationsRules: [OperationsRule] = []
@@ -85,8 +126,28 @@
             sessions.filter { [.waitingApproval, .waitingInput, .failed].contains($0.state) }
         }
 
+        public var decisionAwaitingProviderAcknowledgment: DecisionLifecycleSnapshot? {
+            decisionLifecycles.first {
+                $0.state == .userResolvedAwaitingProviderAck
+                    || $0.state == .automaticallyResolvedAwaitingProviderAck
+                    || $0.state == .providerAcknowledged
+            }
+        }
+
         public var retainsDataWhileOffline: Bool {
             connectionState == .offline && (!sessions.isEmpty || !pendingDecisions.isEmpty)
+        }
+
+        public func usagePresentation(
+            at referenceDate: Date = Date(),
+            staleAfter: TimeInterval = SessionUsageMetric.defaultStaleAfter
+        ) -> SessionUsagePresentation {
+            let session: SessionListItem? = if let selectedSessionID {
+                sessions.first { $0.id == selectedSessionID }
+            } else {
+                activeSessions.max { $0.lastMeaningfulEventAt < $1.lastMeaningfulEventAt }
+            }
+            return SessionUsagePresentation(session: session, at: referenceDate, staleAfter: staleAfter)
         }
 
         private let transport: any AgentControlTransport
@@ -175,6 +236,8 @@
                 helperHealth = snapshot.health
                 sessions = snapshot.sessions
                 pendingDecisions = Self.uniqueDecisions(snapshot.pendingDecisions)
+                decisionLifecycles = snapshot.decisionLifecycles
+                synchronizeAcknowledgmentStatuses()
                 connectionState = .online
                 await notificationCoordinator?.reconcile(pendingDecisions)
                 if let alerts = try? await transport.alerts() {
@@ -204,11 +267,19 @@
             Task { [weak self] in await self?.loadSession(id: id) }
         }
 
+        public func selectDecision(_ requestID: UUID) {
+            guard pendingDecisions.contains(where: { $0.requestID == requestID }) else { return }
+            selectedDecisionID = requestID
+            notificationRouteState = .selected(requestID)
+            moveDecisionToFront(requestID)
+        }
+
         public func resolve(_ decision: PendingHookDecision, as value: HookDecision) async -> DecisionResolutionDisposition {
             guard DecisionAvailability.evaluate(decision) == .actionable else {
                 acknowledgmentStatuses[decision.requestID] = .expired
                 return .expired
             }
+            guard acknowledgmentStatuses[decision.requestID] != .sending else { return .notFound }
             acknowledgmentStatuses[decision.requestID] = .sending
             do {
                 let disposition = try await transport.resolve(HookDecisionResolution(
@@ -217,6 +288,13 @@
                     decision: value
                 ))
                 acknowledgmentStatuses[decision.requestID] = Self.acknowledgment(for: disposition)
+                if disposition == .accepted || disposition == .expired || disposition == .revisionMismatch {
+                    notificationCoordinator?.remove(
+                        requestID: decision.requestID,
+                        revision: decision.revision,
+                        kind: decision.kind
+                    )
+                }
                 await refreshNow()
                 return disposition
             } catch {
@@ -227,12 +305,36 @@
         }
 
         @discardableResult
+        // Notification actions cross availability, revision, privacy, and helper-state gates.
+        // swiftlint:disable:next cyclomatic_complexity function_body_length
         public func handleNotificationResponse(
             _ response: MacNotificationResponse,
             now: Date = Date()
         ) async -> NotificationResponseDisposition {
+            await refreshNow()
+            if response.action == .approve || response.action == .deny, connectionState != .online {
+                notificationRouteState = .helperUnavailable
+                acknowledgmentStatuses[response.requestID] = .rejected
+                return .rejected
+            }
             guard let decision = pendingDecisions.first(where: { $0.requestID == response.requestID }) else {
+                selectedDecisionID = nil
+                notificationRouteState = .inactive(response.sessionID)
+                if let sessionID = response.sessionID {
+                    selectSession(sessionID)
+                }
+                if let kind = response.kind {
+                    notificationCoordinator?.remove(
+                        requestID: response.requestID,
+                        revision: response.revision,
+                        kind: kind
+                    )
+                }
                 return .notFound
+            }
+            if let kind = response.kind, kind != decision.kind {
+                acknowledgmentStatuses[response.requestID] = .rejected
+                return .rejected
             }
             guard decision.revision == response.revision else {
                 acknowledgmentStatuses[response.requestID] = .superseded
@@ -247,23 +349,31 @@
                 acknowledgmentStatuses[response.requestID] = .rejected
                 return .rejected
             }
+            if response.action == .approve || response.action == .deny {
+                let category = MacNotificationCoordinator.category(for: decision)
+                guard category == .approval || category == .plan else {
+                    acknowledgmentStatuses[response.requestID] = .rejected
+                    return .rejected
+                }
+            }
             switch response.action {
             case .approve:
                 guard decision.kind == .approval || decision.kind == .plan else {
                     acknowledgmentStatuses[response.requestID] = .rejected
                     return .rejected
                 }
-                _ = await resolve(decision, as: .approve)
-                return .sent
+                return await Self.notificationDisposition(for: resolve(decision, as: .approve))
             case .deny:
                 guard decision.kind == .approval || decision.kind == .plan else {
                     acknowledgmentStatuses[response.requestID] = .rejected
                     return .rejected
                 }
-                _ = await resolve(decision, as: .deny)
-                return .sent
+                return await Self.notificationDisposition(for: resolve(decision, as: .deny))
             case .review:
                 selectedSection = .inbox
+                selectedDecisionID = decision.requestID
+                notificationRouteState = .selected(decision.requestID)
+                moveDecisionToFront(decision.requestID)
                 return .reviewed
             case .openTerminal:
                 pendingNavigationToken = decision.terminalContext?.correlationToken
@@ -334,7 +444,9 @@
                     diagnosticsReport = try await transport.diagnostics()
                 case .privacy:
                     privacy = try await transport.privacySettings()
-                case .active, .inbox, .integrations:
+                case .integrations:
+                    await refreshIntegrationActivities()
+                case .active, .inbox:
                     break
                 }
                 operationsError = nil
@@ -343,6 +455,99 @@
                 // cached state usable while clearly scoping the unavailable surface.
                 operationsError = "This feature requires the Phase 9 helper."
             }
+        }
+
+        public func integrationActivity(provider: String) -> ProviderIntegrationActivity {
+            integrationActivities[provider] ?? ProviderIntegrationActivity()
+        }
+
+        private func refreshIntegrationActivities() async {
+            var activities: [String: ProviderIntegrationActivity] = [:]
+            for provider in ["codex", "claude", "gemini", "cursor"] {
+                let providerSessions = sessions
+                    .filter { $0.adapterID.rawValue == provider }
+                    .sorted { $0.lastMeaningfulEventAt > $1.lastMeaningfulEventAt }
+                let session = providerSessions.first
+                var events: [PersistedSessionEvent] = []
+                for item in providerSessions.prefix(20) {
+                    await events += (try? transport.events(sessionID: item.id, limit: 500)) ?? []
+                }
+                let lastEvent = events.max { $0.envelope.occurredAt < $1.envelope.occurredAt }
+                let lifecycles = decisionLifecycles.filter { $0.provider == provider }
+                let lastDecision = lifecycles.max { $0.updatedAt < $1.updatedAt }
+                let lastAcknowledgment = lifecycles
+                    .filter {
+                        $0.state == .providerAcknowledged || $0.state == .applied
+                            || $0.state == .deniedApplied || $0.state == .providerRejected
+                            || $0.state == .cancelled
+                    }
+                    .max { $0.updatedAt < $1.updatedAt }
+                let persistedDecision = events
+                    .compactMap(Self.persistedDecisionActivity)
+                    .max { $0.date < $1.date }
+                let persistedAcknowledgment = events
+                    .compactMap(Self.persistedAcknowledgmentActivity)
+                    .max { $0.date < $1.date }
+                activities[provider] = ProviderIntegrationActivity(
+                    lastEventAt: lastEvent?.envelope.occurredAt ?? session?.lastMeaningfulEventAt,
+                    lastEventType: lastEvent?.envelope.eventType,
+                    lastDecisionAt: lastDecision?.updatedAt ?? persistedDecision?.date,
+                    lastDecisionKind: lastDecision?.kind ?? persistedDecision?.kind,
+                    lastDecisionState: lastDecision?.state ?? persistedDecision?.state,
+                    lastProviderAcknowledgmentAt: lastAcknowledgment?.updatedAt ?? persistedAcknowledgment?.date,
+                    lastProviderAcknowledgmentState: lastAcknowledgment?.state ?? persistedAcknowledgment?.state,
+                    lastRedactedErrorKey: session?.state == .failed
+                        ? "integrations.error.providerReportedFailure"
+                        : nil
+                )
+            }
+            integrationActivities = activities
+        }
+
+        private struct PersistedDecisionActivity {
+            let date: Date
+            let kind: HookDecisionKind
+            let state: DecisionLifecycleState
+        }
+
+        private static func persistedDecisionActivity(
+            _ item: PersistedSessionEvent
+        ) -> PersistedDecisionActivity? {
+            let kind: HookDecisionKind
+            switch item.envelope.eventType {
+            case "approval.requested": kind = .approval
+            case "question.requested": kind = .question
+            case "plan.reviewRequested": kind = .plan
+            default: return nil
+            }
+            return PersistedDecisionActivity(
+                date: item.envelope.occurredAt,
+                kind: kind,
+                state: .awaitingUser
+            )
+        }
+
+        private static func persistedAcknowledgmentActivity(
+            _ item: PersistedSessionEvent
+        ) -> (date: Date, state: DecisionLifecycleState)? {
+            guard item.envelope.eventType == "approval.statusChanged"
+                || item.envelope.eventType == "decision.statusChanged",
+                let value = item.envelope.payload["status"]?.stringValue,
+                let status = ApprovalStatus(rawValue: value)
+            else { return nil }
+            let state: DecisionLifecycleState? = switch status {
+            case .providerAcknowledged: .providerAcknowledged
+            case .applied: .applied
+            case .deniedApplied: .deniedApplied
+            case .expired: .expired
+            case .superseded: .superseded
+            case .cancelledByProvider: .cancelled
+            case .providerRejected, .policyRejected, .deliveryFailed: .providerRejected
+            case .received, .classified, .presented, .userDecisionPending,
+                 .signedDecisionReceived, .policyValidated, .sentToProvider:
+                nil
+            }
+            return state.map { (item.envelope.occurredAt, $0) }
         }
 
         public func searchHistory() async {
@@ -430,7 +635,8 @@
                     state: notification.state,
                     startedAt: current.startedAt,
                     lastMeaningfulEventAt: Date(),
-                    snapshotRevision: notification.snapshotRevision
+                    snapshotRevision: notification.snapshotRevision,
+                    usageMetrics: current.usageMetrics
                 )
             }
             await refreshNow()
@@ -474,6 +680,45 @@
             case .invalidDecision: .rejected
             case .notFound: .failed
             }
+        }
+
+        private static func notificationDisposition(
+            for disposition: DecisionResolutionDisposition
+        ) -> NotificationResponseDisposition {
+            switch disposition {
+            case .accepted: .sent
+            case .expired: .expired
+            case .revisionMismatch: .superseded
+            case .invalidDecision: .rejected
+            case .notFound: .notFound
+            }
+        }
+
+        // Exhaustive lifecycle-to-UI acknowledgment mapping stays explicit.
+        // swiftlint:disable:next cyclomatic_complexity
+        private func synchronizeAcknowledgmentStatuses() {
+            for lifecycle in decisionLifecycles {
+                guard lifecycle.state != .awaitingUser else { continue }
+                let status: LocalAcknowledgmentStatus = switch lifecycle.state {
+                case .awaitingUser: .failed // Unreachable after the guard above.
+                case .userResolvedAwaitingProviderAck: .sentToProvider
+                case .automaticallyResolvedAwaitingProviderAck: .automaticallySentToProvider
+                case .providerAcknowledged: .providerAcknowledged
+                case .applied: .applied
+                case .deniedApplied: .deniedApplied
+                case .expired: .expired
+                case .cancelled: .cancelled
+                case .superseded: .superseded
+                case .providerRejected: .rejected
+                }
+                acknowledgmentStatuses[lifecycle.requestID] = status
+            }
+        }
+
+        private func moveDecisionToFront(_ requestID: UUID) {
+            guard let index = pendingDecisions.firstIndex(where: { $0.requestID == requestID }), index != 0 else { return }
+            let decision = pendingDecisions.remove(at: index)
+            pendingDecisions.insert(decision, at: 0)
         }
     }
 #endif

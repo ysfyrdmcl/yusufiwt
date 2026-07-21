@@ -17,13 +17,19 @@ and risk context. The UI independently checks expiry before sending and keeps
 only the newest revision for each request ID.
 
 Local notifications use separate approval, question, secret-question, and plan
-categories. They group by session and deduplicate by request ID plus revision.
-Secret questions have no answer action. Quiet hours produce silent delivery;
+categories. They group by session and deduplicate by decision kind, request ID,
+and revision. Secret and high/critical requests are review-only. A default tap
+also routes to review and never approves. Routes contain only stable IDs and
+revision, so cold launch can select the current request without carrying prompt
+or command text. Quiet hours and the sound preference produce silent delivery;
 focus-aware delivery uses passive interruption and never requests a Focus
-bypass.
+bypass. Preference changes replace scheduled requests under the same stable ID,
+and provider acknowledgment/removal reconciles both pending and delivered OS
+notifications.
 
-An accepted local resolution is shown as `sentToProvider`. Only a normalized
-provider acknowledgment may later produce an applied state.
+An accepted local resolution is shown as awaiting provider acknowledgment.
+Only a normalized provider acknowledgment may later produce `applied` or
+`deniedApplied`; a provider denial after a local approve is `providerRejected`.
 
 ## Consequences
 

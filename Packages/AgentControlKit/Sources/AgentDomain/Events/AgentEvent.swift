@@ -4,6 +4,7 @@ public enum AgentEvent: Codable, Sendable, Equatable {
     case approvalStatusChanged(id: ApprovalRequestID, status: ApprovalStatus)
     case questionRequested(AgentQuestion)
     case questionResolved(QuestionID)
+    case usageUpdated(SessionUsageUpdate)
     case providerResumed
     case unknown(type: String)
 }

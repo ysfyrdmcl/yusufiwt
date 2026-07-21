@@ -12,8 +12,6 @@ Config/ExportOptions/TestFlightUpload.plist
 Config/Updates/channels.json
 Config/SBOM/agentcontrol.cdx.json
 Docs/ADR/0020-release-pipeline.md
-Docs/PHASE_16_TEST_PLAN.md
-Docs/PHASE_16_IMPLEMENTATION_REPORT.md
 Docs/RELEASE_RUNBOOK.md
 Scripts/release_macos.sh
 Scripts/release_ios.sh

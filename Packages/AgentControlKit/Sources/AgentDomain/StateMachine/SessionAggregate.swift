@@ -15,12 +15,12 @@ public struct SessionAggregate: Sendable {
     private var processedEventIDs: Set<EventID>
     private var lastSequenceBySource: [String: Int64]
 
-    public init(session: AgentSession) {
+    public init(session: AgentSession, lastSequenceBySource: [String: Int64] = [:]) {
         self.session = session
         pendingApprovalIDs = []
         pendingQuestionIDs = []
         processedEventIDs = []
-        lastSequenceBySource = [:]
+        self.lastSequenceBySource = lastSequenceBySource
     }
 
     public mutating func apply(_ sequenced: SequencedAgentEvent) -> EventApplicationResult {
@@ -49,6 +49,8 @@ public struct SessionAggregate: Sendable {
         return nil
     }
 
+    // All AgentEvent variants are deliberately handled exhaustively here.
+    // swiftlint:disable:next cyclomatic_complexity
     private mutating func applyAccepted(_ event: AgentEvent) -> EventApplicationResult {
         switch event {
         case let .stateChanged(nextState):
@@ -68,6 +70,8 @@ public struct SessionAggregate: Sendable {
         case let .questionResolved(id):
             pendingQuestionIDs.remove(id)
             return restoreAttentionState()
+        case let .usageUpdated(update):
+            return applyUsageUpdate(update)
         case .providerResumed:
             guard session.state.isTerminal else { return .recordedWithoutStateChange }
             session.state = .running
@@ -77,6 +81,40 @@ public struct SessionAggregate: Sendable {
         case .unknown:
             return .recordedWithoutStateChange
         }
+    }
+
+    private mutating func applyUsageUpdate(_ update: SessionUsageUpdate) -> EventApplicationResult {
+        var changed = false
+        if let nextState = update.concurrentState {
+            let hidesPendingAttention = [.thinking, .running, .executing].contains(nextState)
+                && (!pendingApprovalIDs.isEmpty || !pendingQuestionIDs.isEmpty)
+            if !hidesPendingAttention {
+                if SessionStateMachine.canTransition(from: session.state, to: nextState), session.state != nextState {
+                    session.state = nextState
+                    changed = true
+                }
+            }
+        }
+
+        var merged = session.usageMetrics
+        for metric in update.metrics {
+            if let index = merged.firstIndex(where: { $0.provider == metric.provider && $0.kind == metric.kind }) {
+                guard metric.updatedAt >= merged[index].updatedAt else { continue }
+                if merged[index] != metric {
+                    merged[index] = metric
+                    changed = true
+                }
+            } else {
+                merged.append(metric)
+                changed = true
+            }
+        }
+        guard changed else { return .recordedWithoutStateChange }
+        session.usageMetrics = merged.sorted {
+            ($0.provider.rawValue, $0.kind.rawValue) < ($1.provider.rawValue, $1.kind.rawValue)
+        }
+        session.snapshotRevision += 1
+        return .applied
     }
 
     private mutating func applyState(_ nextState: SessionState) -> EventApplicationResult {

@@ -9,6 +9,11 @@
         case toml
     }
 
+    public enum HookCommandLayout: String, Codable, Hashable, Sendable {
+        case nested
+        case direct
+    }
+
     public enum ManagedConfigError: Error, Sendable, Equatable, CustomStringConvertible {
         case malformedConfiguration
         case unsupportedRoot
@@ -42,6 +47,8 @@
         public let timeoutSeconds: Int
         public let marker: String
         public let usesNameField: Bool
+        public let layout: HookCommandLayout
+        public let failClosed: Bool
 
         public init(
             event: String,
@@ -49,7 +56,9 @@
             command: String,
             timeoutSeconds: Int,
             marker: String,
-            usesNameField: Bool = false
+            usesNameField: Bool = false,
+            layout: HookCommandLayout = .nested,
+            failClosed: Bool = false
         ) {
             self.event = event
             self.matcher = matcher
@@ -57,6 +66,8 @@
             self.timeoutSeconds = timeoutSeconds
             self.marker = marker
             self.usesNameField = usesNameField
+            self.layout = layout
+            self.failClosed = failClosed
         }
     }
 
@@ -454,7 +465,7 @@
             var bytes = Array(content.utf8)
             guard let root = JSONScanner.rootObject(in: bytes) else { throw ManagedConfigError.unsupportedRoot }
             let group = makeGroup(hook)
-            if content.contains(hook.marker) {
+            if containsExactMarker(hook.marker, in: content) {
                 guard let hooks = JSONScanner.property("hooks", inObject: root, bytes: bytes),
                       bytes[hooks.lowerBound] == ascii("{"),
                       let eventArray = JSONScanner.property(
@@ -464,7 +475,10 @@
                       ),
                       bytes[eventArray.lowerBound] == ascii("["),
                       let ownedEntry = JSONScanner.arrayElements(in: eventArray, bytes: bytes).first(where: {
-                          (String(bytes: bytes[$0], encoding: .utf8) ?? "").contains(hook.marker)
+                          containsExactMarker(
+                              hook.marker,
+                              in: String(bytes: bytes[$0], encoding: .utf8) ?? ""
+                          )
                       })
                 else { throw ManagedConfigError.managedEntryConflict(hook.marker) }
                 guard String(bytes: bytes[ownedEntry], encoding: .utf8) != group else { return content }
@@ -496,7 +510,7 @@
                   bytes[eventArray.lowerBound] == ascii("[")
             else { return content }
             guard let element = JSONScanner.arrayElements(in: eventArray, bytes: bytes).first(where: {
-                (String(bytes: bytes[$0], encoding: .utf8) ?? "").contains(marker)
+                containsExactMarker(marker, in: String(bytes: bytes[$0], encoding: .utf8) ?? "")
             }) else { return content }
 
             let elements = JSONScanner.arrayElements(in: eventArray, bytes: bytes)
@@ -524,6 +538,19 @@
         }
 
         private static func makeGroup(_ hook: HookCommandDefinition) -> String {
+            if hook.layout == .direct {
+                let markedCommand = "AGENTCONTROL_MANAGED_MARKER="
+                    + shellQuoted(hook.marker) + " " + hook.command
+                var group = "{"
+                if let matcher = hook.matcher {
+                    group += "\"matcher\":\"\(escape(matcher))\","
+                }
+                group += "\"command\":\"\(escape(markedCommand))\",\"timeout\":\(hook.timeoutSeconds)"
+                if hook.failClosed {
+                    group += ",\"failClosed\":true"
+                }
+                return group + "}"
+            }
             var group = "{"
             if let matcher = hook.matcher {
                 group += "\"matcher\":\"\(escape(matcher))\","
@@ -535,6 +562,10 @@
                 group += "\"statusMessage\":\"yusufiwt [\(escape(hook.marker))]\""
             }
             return group + "}]}"
+        }
+
+        private static func shellQuoted(_ value: String) -> String {
+            "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
         }
 
         private static func insertArrayValue(_ value: String, into array: Range<Int>, bytes: [UInt8]) -> [UInt8] {
@@ -558,6 +589,28 @@
 
         private static func escape(_ value: String) -> String {
             value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        }
+
+        /// Marker names share prefixes (for example `beforetool` and
+        /// `beforetoolselection`). Only a complete marker token identifies an
+        /// AgentControl-owned entry.
+        private static func containsExactMarker(_ marker: String, in content: String) -> Bool {
+            var searchRange = content.startIndex ..< content.endIndex
+            while let range = content.range(of: marker, range: searchRange) {
+                let hasIdentifierBefore = range.lowerBound > content.startIndex
+                    && isMarkerCharacter(content[content.index(before: range.lowerBound)])
+                let hasIdentifierAfter = range.upperBound < content.endIndex
+                    && isMarkerCharacter(content[range.upperBound])
+                if !hasIdentifierBefore, !hasIdentifierAfter {
+                    return true
+                }
+                searchRange = range.upperBound ..< content.endIndex
+            }
+            return false
+        }
+
+        private static func isMarkerCharacter(_ character: Character) -> Bool {
+            character.isLetter || character.isNumber || character == "." || character == "_" || character == "-"
         }
     }
 

@@ -6,6 +6,7 @@
         case codex
         case claude
         case gemini
+        case cursor
         case generic
 
         public var adapterID: AdapterID {
@@ -14,6 +15,13 @@
     }
 
     public struct ProviderVersion: Codable, Comparable, Hashable, Sendable, CustomStringConvertible {
+        private struct ParsedComponents {
+            let major: Int
+            let minor: Int
+            let patch: Int
+            let suffix: String?
+        }
+
         public let major: Int
         public let minor: Int
         public let patch: Int
@@ -28,14 +36,27 @@
 
         public init?(_ output: String) {
             let candidates = output.split(whereSeparator: { $0.isWhitespace || $0 == "/" || $0 == "v" })
-            guard let token = candidates.first(where: { $0.first?.isNumber == true && $0.contains(".") }) else { return nil }
-            let pieces = token.split(separator: "-", maxSplits: 1)
-            let numbers = pieces[0].split(separator: ".")
-            guard numbers.count >= 2, let major = Int(numbers[0]), let minor = Int(numbers[1]) else { return nil }
-            self.major = major
-            self.minor = minor
-            patch = numbers.count > 2 ? Int(numbers[2].prefix(while: \.isNumber)) ?? 0 : 0
-            suffix = pieces.count > 1 ? String(pieces[1]) : nil
+            let parsed = candidates.lazy.compactMap { token -> ParsedComponents? in
+                guard token.first?.isNumber == true, token.contains(".") else { return nil }
+                let pieces = token.split(separator: "-", maxSplits: 1)
+                let numbers = pieces[0].split(separator: ".")
+                guard numbers.count >= 2,
+                      let major = Int(numbers[0]),
+                      let minor = Int(numbers[1])
+                else { return nil }
+                let patch = numbers.count > 2 ? Int(numbers[2].prefix(while: \.isNumber)) ?? 0 : 0
+                return ParsedComponents(
+                    major: major,
+                    minor: minor,
+                    patch: patch,
+                    suffix: pieces.count > 1 ? String(pieces[1]) : nil
+                )
+            }.first
+            guard let parsed else { return nil }
+            major = parsed.major
+            minor = parsed.minor
+            patch = parsed.patch
+            suffix = parsed.suffix
         }
 
         public static func < (lhs: Self, rhs: Self) -> Bool {
@@ -54,7 +75,8 @@
         public init(knownMajorVersions: [HookProvider: Set<Int>] = [
             .codex: [0, 1],
             .claude: [1, 2],
-            .gemini: [0, 1]
+            .gemini: [0, 1],
+            .cursor: [1, 2, 3]
         ]) {
             self.knownMajorVersions = knownMajorVersions
         }
@@ -66,10 +88,16 @@
             else { return CapabilityMatrix(supported: [.monitorSessions]) }
             switch provider {
             case .codex:
-                return CapabilityMatrix(supported: [.monitorSessions, .approveRequests, .denyRequests])
+                return CapabilityMatrix(supported: [
+                    .monitorSessions, .approveRequests, .denyRequests, .answerQuestions
+                ])
             case .claude:
-                return CapabilityMatrix(supported: [.monitorSessions, .approveRequests, .denyRequests, .answerQuestions])
+                return CapabilityMatrix(supported: [
+                    .monitorSessions, .approveRequests, .denyRequests, .answerQuestions, .reviewPlans
+                ])
             case .gemini:
+                return CapabilityMatrix(supported: [.monitorSessions, .approveRequests, .denyRequests, .reviewPlans])
+            case .cursor:
                 return CapabilityMatrix(supported: [.monitorSessions, .approveRequests, .denyRequests])
             case .generic:
                 return CapabilityMatrix(supported: [.monitorSessions])
@@ -170,6 +198,9 @@
             candidates += ["/opt/homebrew/bin", "/usr/local/bin"].map {
                 URL(fileURLWithPath: $0).appendingPathComponent(executable)
             }
+            if provider == .cursor {
+                candidates.append(URL(fileURLWithPath: "/Applications/Cursor.app/Contents/Resources/app/bin/cursor"))
+            }
             var seen = Set<String>()
             return candidates.filter { seen.insert($0.standardizedFileURL.path).inserted }
         }
@@ -224,6 +255,9 @@
             case .gemini:
                 configURL = homeDirectory.appendingPathComponent(".gemini/settings.json")
                 format = .json
+            case .cursor:
+                configURL = homeDirectory.appendingPathComponent(".cursor/hooks.json")
+                format = .json
             case .generic:
                 throw ProviderIntegrationError.unsupportedProvider
             }
@@ -238,31 +272,7 @@
         }
 
         private static func definitions(provider: HookProvider, command: String) -> [HookCommandDefinition] {
-            let events: [EventDefinition] = switch provider {
-            case .codex:
-                [
-                    EventDefinition("SessionStart", timeout: 5), EventDefinition("UserPromptSubmit", timeout: 5),
-                    EventDefinition("PreToolUse", timeout: 70), EventDefinition("PermissionRequest", timeout: 70),
-                    EventDefinition("PostToolUse", timeout: 5), EventDefinition("Stop", timeout: 5)
-                ]
-            case .claude:
-                [
-                    EventDefinition("SessionStart", timeout: 5), EventDefinition("UserPromptSubmit", timeout: 5),
-                    EventDefinition("PreToolUse", timeout: 5), EventDefinition("PermissionRequest", timeout: 70),
-                    EventDefinition("PostToolUse", timeout: 5), EventDefinition("Notification", timeout: 5),
-                    EventDefinition("Elicitation", timeout: 60), EventDefinition("Stop", timeout: 5),
-                    EventDefinition("SessionEnd", timeout: 5)
-                ]
-            case .gemini:
-                [
-                    EventDefinition("SessionStart", timeout: 1000), EventDefinition("BeforeAgent", timeout: 1000),
-                    EventDefinition("BeforeTool", timeout: 60000), EventDefinition("AfterTool", timeout: 1000),
-                    EventDefinition("Notification", timeout: 1000), EventDefinition("AfterAgent", timeout: 1000),
-                    EventDefinition("SessionEnd", timeout: 1000)
-                ]
-            case .generic:
-                []
-            }
+            let events = eventDefinitions(for: provider)
             return events.map { event in
                 HookCommandDefinition(
                     event: event.name,
@@ -270,10 +280,87 @@
                     command: command,
                     timeoutSeconds: event.timeout,
                     marker: "agentcontrol.\(provider.rawValue).\(event.name.lowercased())",
-                    usesNameField: provider == .gemini
+                    usesNameField: provider == .gemini,
+                    layout: provider == .cursor ? .direct : .nested,
+                    failClosed: provider == .cursor
+                        && ["preToolUse", "beforeShellExecution", "beforeMCPExecution"].contains(event.name)
                 )
             }
         }
+
+        private static func eventDefinitions(for provider: HookProvider) -> [EventDefinition] {
+            switch provider {
+            case .codex: codexEvents
+            case .claude: claudeEvents
+            case .gemini: geminiEvents
+            case .cursor: cursorEvents
+            case .generic: []
+            }
+        }
+
+        private static let codexEvents = [
+            EventDefinition("SessionStart", timeout: 5), EventDefinition("UserPromptSubmit", timeout: 5),
+            EventDefinition("PreToolUse", timeout: 70), EventDefinition("PermissionRequest", timeout: 70),
+            EventDefinition("PostToolUse", timeout: 5), EventDefinition("PreCompact", timeout: 5),
+            EventDefinition("PostCompact", timeout: 5), EventDefinition("SubagentStart", timeout: 5),
+            EventDefinition("SubagentStop", timeout: 5), EventDefinition("Stop", timeout: 5)
+        ]
+
+        /// WorktreeCreate is a replacement hook that must return a directory,
+        /// not an observer. FileChanged requires a literal path matcher. Installing
+        /// either globally would change provider behavior instead of monitoring it.
+        private static let claudeEvents = [
+            EventDefinition("SessionStart", timeout: 5), EventDefinition("Setup", timeout: 5),
+            EventDefinition("UserPromptSubmit", timeout: 5), EventDefinition("UserPromptExpansion", timeout: 5),
+            EventDefinition("MessageDisplay", timeout: 5),
+            EventDefinition("PreToolUse", timeout: 70), EventDefinition("PermissionRequest", timeout: 70),
+            EventDefinition("PermissionDenied", timeout: 5), EventDefinition("PostToolUse", timeout: 5),
+            EventDefinition("PostToolUseFailure", timeout: 5), EventDefinition("PostToolBatch", timeout: 5),
+            EventDefinition("Notification", timeout: 5),
+            EventDefinition("Elicitation", timeout: 60), EventDefinition("ElicitationResult", timeout: 5),
+            EventDefinition("SubagentStart", timeout: 5), EventDefinition("SubagentStop", timeout: 5),
+            EventDefinition("TaskCreated", timeout: 5), EventDefinition("PreCompact", timeout: 5),
+            EventDefinition("PostCompact", timeout: 5), EventDefinition("ConfigChange", timeout: 5),
+            EventDefinition("InstructionsLoaded", timeout: 5), EventDefinition("CwdChanged", timeout: 5),
+            EventDefinition("WorktreeRemove", timeout: 5),
+            EventDefinition("TeammateIdle", timeout: 5), EventDefinition("TaskCompleted", timeout: 5),
+            EventDefinition("Stop", timeout: 5), EventDefinition("StopFailure", timeout: 5),
+            EventDefinition("SessionEnd", timeout: 5)
+        ]
+
+        private static let geminiEvents = [
+            EventDefinition("SessionStart", timeout: 1000), EventDefinition("BeforeAgent", timeout: 1000),
+            EventDefinition("BeforeModel", timeout: 1000),
+            EventDefinition("BeforeToolSelection", timeout: 1000),
+            EventDefinition("BeforeTool", timeout: 60000), EventDefinition("AfterTool", timeout: 1000),
+            EventDefinition("AfterModel", timeout: 1000), EventDefinition("Notification", timeout: 1000),
+            EventDefinition("PreCompress", timeout: 1000), EventDefinition("AfterAgent", timeout: 1000),
+            EventDefinition("SessionEnd", timeout: 1000)
+        ]
+
+        private static let cursorEvents = [
+            EventDefinition("sessionStart", timeout: 5),
+            EventDefinition("beforeSubmitPrompt", timeout: 5),
+            EventDefinition("preToolUse", matcher: "Write|Delete|Task", timeout: 70),
+            EventDefinition("postToolUse", timeout: 5),
+            EventDefinition("postToolUseFailure", timeout: 5),
+            EventDefinition("subagentStart", timeout: 5),
+            EventDefinition("subagentStop", timeout: 5),
+            EventDefinition("beforeShellExecution", timeout: 70),
+            EventDefinition("beforeMCPExecution", timeout: 70),
+            EventDefinition("afterShellExecution", timeout: 5),
+            EventDefinition("afterMCPExecution", timeout: 5),
+            EventDefinition("beforeReadFile", timeout: 5),
+            EventDefinition("afterFileEdit", timeout: 5),
+            EventDefinition("beforeTabFileRead", timeout: 5),
+            EventDefinition("afterTabFileEdit", timeout: 5),
+            EventDefinition("afterAgentResponse", timeout: 5),
+            EventDefinition("afterAgentThought", timeout: 5),
+            EventDefinition("preCompact", timeout: 5),
+            EventDefinition("stop", timeout: 5),
+            EventDefinition("sessionEnd", timeout: 5),
+            EventDefinition("workspaceOpen", timeout: 5)
+        ]
 
         private static func shellQuoted(_ value: String) -> String {
             "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"

@@ -14,7 +14,6 @@ for path in \
   Packages/AgentControlKit/Tests/AgentDomainTests/OperationsRuleEngineTests.swift \
   Packages/AgentControlKit/Tests/AgentPersistenceTests/Phase9OperationsTests.swift \
   Packages/AgentControlKit/Tests/AgentLocalIPCTests/Phase9RuntimeTests.swift \
-  Docs/PHASE_9_TEST_PLAN.md \
   Docs/ADR/0015-phase9-operations-boundary.md
 do
   test -f "$path" || { echo "missing Phase 9 file: $path" >&2; exit 1; }

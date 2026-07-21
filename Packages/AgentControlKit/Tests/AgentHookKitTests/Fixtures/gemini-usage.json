@@ -1,0 +1,1 @@
+{"session_id":"gemini-usage-session","cwd":"/private/tmp/work","hook_event_name":"AfterModel","timestamp":"2026-07-19T10:00:00Z","llm_response":{"usageMetadata":{"promptTokenCount":400,"candidatesTokenCount":80,"totalTokenCount":480}}}

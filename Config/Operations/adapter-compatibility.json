@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-07-18",
+  "publishedAt": "2026-07-19",
   "localOnlyMode": {
     "accountRequired": false,
     "status": "verified",
     "evidence": [
       "Tests/Contracts/test_phase6_contract.sh",
-      "Packages/AgentControlKit/Tests/AgentHookKitTests/ProviderIntegrationTests.swift"
+      "Packages/AgentControlKit/Tests/AgentHookKitTests/Phase6AdapterTests.swift"
     ]
   },
   "adapters": [
@@ -15,10 +15,11 @@
       "versions": ["0.x", "1.x"],
       "status": "beta",
       "modes": ["managed", "hook"],
-      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests"],
+      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests", "answer_questions"],
       "fallback": "monitor_only",
       "evidence": [
         "Packages/AgentControlKit/Tests/AgentCodexAdapterTests",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Phase6AdapterTests.swift",
         "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures"
       ]
     },
@@ -27,10 +28,10 @@
       "versions": ["1.x", "2.x"],
       "status": "beta",
       "modes": ["hook"],
-      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests", "answer_questions"],
+      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests", "answer_questions", "review_plans"],
       "fallback": "monitor_only",
       "evidence": [
-        "Packages/AgentControlKit/Tests/AgentHookKitTests/ProviderHookMapperTests.swift",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Phase6AdapterTests.swift",
         "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures"
       ]
     },
@@ -39,11 +40,32 @@
       "versions": ["0.x", "1.x"],
       "status": "beta",
       "modes": ["hook"],
-      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests"],
+      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests", "review_plans"],
       "fallback": "monitor_only",
       "evidence": [
-        "Packages/AgentControlKit/Tests/AgentHookKitTests/ProviderHookMapperTests.swift",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Phase6AdapterTests.swift",
         "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures"
+      ]
+    },
+    {
+      "id": "cursor",
+      "versions": ["1.x", "2.x", "3.x"],
+      "status": "beta",
+      "modes": ["hook", "ide_navigation"],
+      "capabilities": ["monitor_sessions", "approve_requests", "deny_requests", "context_usage"],
+      "unsupportedCapabilities": {
+        "answer_questions": "Cursor does not publish a stable synchronous Agent-question hook.",
+        "review_plans": "Cursor does not publish a stable synchronous plan-review hook."
+      },
+      "fallback": "monitor_only",
+      "evidence": [
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Phase6AdapterTests.swift",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/cursor-session-start.json",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/cursor-pre-tool-write.json",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/cursor-post-tool-write.json",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/cursor-before-shell.json",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/cursor-before-mcp.json",
+        "Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/cursor-pre-compact.json"
       ]
     }
   ]

@@ -37,7 +37,7 @@ Preview before changing any configuration:
 /Applications/yusufiwt.app/Contents/MacOS/agentcontrol-hook managed-install codex
 ```
 
-Replace `codex` with `claude` or `gemini`. Installation is atomic, backs up the
+Replace `codex` with `claude`, `gemini`, or `cursor`. Installation is atomic, backs up the
 original, and changes only yusufiwt-managed entries. Use `managed-repair` or
 `managed-uninstall` with the same provider name for recovery.
 
@@ -58,6 +58,6 @@ history survives the product rename.
 ## Recovery
 
 - `agentcontrol-hook doctor`: helper/socket/database status.
-- `agentcontrol-hook managed-preview <codex|claude|gemini>`: show provider edits.
-- `agentcontrol-hook managed-repair <codex|claude|gemini>`: repair only owned blocks.
+- `agentcontrol-hook managed-preview <codex|claude|gemini|cursor>`: show provider edits.
+- `agentcontrol-hook managed-repair <codex|claude|gemini|cursor>`: repair only owned blocks.
 - Re-run the installer if helper health is unavailable.

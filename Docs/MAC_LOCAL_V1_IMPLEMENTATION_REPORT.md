@@ -4,6 +4,12 @@ Date: 2026-07-19
 Host: macOS 26.5.2, Apple Silicon, Europe/Istanbul  
 Source baseline: `main` at `3ca9d6f`
 
+> Historical evidence notice (2026-07-19): Sections below describe the original
+> Mac Local packaging run at that baseline. The current notch-first/usage/
+> decision-lifecycle/provider revision supersedes dashboard wording, test counts,
+> artifact sizes and hashes here. Use `MAC_LOCAL_V1_RELEASE_CHECKLIST.md` and a
+> fresh `make package-mac-local` run as current release evidence.
+
 ## 1. Final status
 
 **CONDITIONAL**
@@ -19,10 +25,10 @@ performance/notification-action observations need user-controlled validation.
 
 Included in Mac Local V1:
 
-- Universal macOS app, menu bar extra, floating panel, dashboard and settings.
+- Universal macOS app, menu bar extra, notch/floating panel, explicit Control Center and settings.
 - Same-user helper, XPC and mode-0600 Unix socket.
 - SQLite/WAL history, rules, analytics, diagnostics, privacy and retention.
-- Codex, Claude and Gemini managed hook preview/install/repair/uninstall tooling.
+- Codex, Claude, Gemini and Cursor managed hook preview/install/repair/uninstall tooling.
 - Approval, question and plan decision paths with provider-acknowledgment state.
 - Local completion, failure, waiting and idle notifications.
 - Safe install, upgrade, uninstall and ad-hoc development fallback.

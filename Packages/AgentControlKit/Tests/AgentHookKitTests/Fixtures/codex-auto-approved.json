@@ -1,0 +1,1 @@
+{"session_id":"codex-session","cwd":"/private/tmp/work","hook_event_name":"PostToolUse","turn_id":"turn-1","tool_name":"Bash","tool_use_id":"call-auto-1","tool_input":{"command":"swift test"},"tool_response":{"success":true},"auto_approved":true}

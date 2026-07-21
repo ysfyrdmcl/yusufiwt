@@ -3,37 +3,6 @@
     import AgentPersistence
     import SwiftUI
 
-    public enum NotchPanelFormatting {
-        public static func elapsed(from start: Date, to end: Date) -> String {
-            let seconds = max(0, Int(end.timeIntervalSince(start)))
-            if seconds < 60 { return "<1m" }
-            let minutes = seconds / 60
-            if minutes < 60 { return "\(minutes)m" }
-            let hours = minutes / 60
-            let remainingMinutes = minutes % 60
-            if hours < 24 { return remainingMinutes == 0 ? "\(hours)h" : "\(hours)h \(remainingMinutes)m" }
-            let days = hours / 24
-            let remainingHours = hours % 24
-            return remainingHours == 0 ? "\(days)d" : "\(days)d \(remainingHours)h"
-        }
-
-        public static func stateTitle(_ state: SessionState) -> String {
-            switch state {
-            case .discovered, .starting: "Starting"
-            case .thinking: "Thinking"
-            case .executing, .running: "Working"
-            case .waitingApproval: "Approval needed"
-            case .waitingInput: "Input needed"
-            case .paused: "Paused"
-            case .completed: "Completed"
-            case .failed: "Failed"
-            case .cancelled: "Cancelled"
-            case .disconnected: "Disconnected"
-            case .stale: "Stale"
-            }
-        }
-    }
-
     public struct FloatingPanelView: View {
         @Bindable var store: AgentControlStore
         let coordinator: FloatingPanelCoordinator
@@ -70,26 +39,28 @@
         }
 
         private var notchHeader: some View {
-            HStack(spacing: 10) {
-                compactLeadingStatus
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: coordinator.toggle) {
+                HStack(spacing: 10) {
+                    compactLeadingStatus
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer(minLength: max(12, coordinator.notchWidth))
+                    Spacer(minLength: max(12, coordinator.notchWidth))
 
-                compactTrailingStatus
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    compactTrailingStatus
+                        .frame(maxWidth: .infinity, alignment: .trailing)
 
-                Image(systemName: coordinator.mode == .expanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.42))
+                    Image(systemName: coordinator.mode == .expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.42))
+                }
+                .padding(.horizontal, 14)
+                .frame(height: max(40, coordinator.notchHeight))
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 14)
-            .frame(height: max(40, coordinator.notchHeight))
-            .contentShape(Rectangle())
-            .onTapGesture { coordinator.toggle() }
+            .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(headerAccessibilityLabel)
-            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("notch.toggle")
         }
 
         @ViewBuilder
@@ -126,23 +97,27 @@
             } else if !liveSessions.isEmpty {
                 HStack(spacing: 7) {
                     QuietAgentGlyph(isAnimating: true)
-                    Text("Working…")
+                    Text("notch.working")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(Color.white.opacity(0.62))
                 }
             } else {
                 HStack(spacing: 6) {
                     Circle().fill(Color.white.opacity(0.32)).frame(width: 6, height: 6)
-                    Text("Ready")
+                    Text("notch.ready")
                         .foregroundStyle(Color.white.opacity(0.55))
                 }
             }
         }
 
-        private var headerAccessibilityLabel: String {
-            if !store.pendingDecisions.isEmpty { return "\(store.pendingDecisions.count) actions needed" }
-            if !liveSessions.isEmpty { return "\(liveSessions.count) agents working" }
-            return String(localized: "notch.ready.accessibility")
+        private var headerAccessibilityLabel: Text {
+            if !store.pendingDecisions.isEmpty {
+                return Text("notch.actionsNeeded") + Text(" \(store.pendingDecisions.count)")
+            }
+            if !liveSessions.isEmpty {
+                return Text("notch.agentsWorking") + Text(" \(liveSessions.count)")
+            }
+            return Text("notch.ready.accessibility")
         }
 
         @ViewBuilder
@@ -154,10 +129,14 @@
                 activityContent
             case .decision:
                 ScrollView {
-                    if let decision = store.pendingDecisions.first {
-                        DecisionRow(store: store, decision: decision)
-                            .padding(AgentControlSpacing.standard)
+                    VStack(spacing: AgentControlSpacing.standard) {
+                        notificationRouteBanner
+                        providerAcknowledgmentBanner
+                        if let decision = store.pendingDecisions.first {
+                            DecisionRow(store: store, decision: decision)
+                        }
                     }
+                    .padding(AgentControlSpacing.standard)
                 }
             case .expanded:
                 expandedContent
@@ -166,10 +145,13 @@
 
         private var expandedContent: some View {
             VStack(spacing: 0) {
-                summaryStrip
+                NotchSummaryStrip(store: store, liveSessions: liveSessions)
 
                 ScrollView {
                     LazyVStack(spacing: 10) {
+                        notificationRouteBanner
+                        providerAcknowledgmentBanner
+
                         ForEach(store.pendingDecisions.prefix(5), id: \.requestID) { decision in
                             DecisionRow(store: store, decision: decision)
                                 .padding(12)
@@ -186,160 +168,89 @@
 
                         if liveSessions.isEmpty, store.pendingDecisions.isEmpty {
                             ContentUnavailableView(
-                                "No active agents",
+                                "notch.empty.title",
                                 systemImage: "moon.stars",
-                                description: Text("Start a Codex task to see live activity here.")
+                                description: Text("notch.empty.message")
                             )
                             .frame(maxWidth: .infinity, minHeight: 220)
                         }
                     }
                     .padding(14)
                 }
+                panelActions
             }
         }
 
-        private var summaryStrip: some View {
-            HStack(spacing: 10) {
-                metric("Live", value: "\(liveSessions.count)", color: .green)
-                if let oldest = liveSessions.min(by: { $0.startedAt < $1.startedAt }) {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        metric(
-                            "Running",
-                            value: NotchPanelFormatting.elapsed(from: oldest.startedAt, to: context.date),
-                            color: .blue
-                        )
+        @ViewBuilder
+        private var notificationRouteBanner: some View {
+            switch store.notificationRouteState {
+            case .inactive:
+                Label("notification.route.inactive", systemImage: "clock.badge.xmark")
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("notification.route.inactive")
+            case .helperUnavailable:
+                Label("notification.route.helperUnavailable", systemImage: "externaldrive.badge.exclamationmark")
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("notification.route.helperUnavailable")
+            case .selected, .none:
+                EmptyView()
+            }
+        }
+
+        @ViewBuilder
+        private var providerAcknowledgmentBanner: some View {
+            if let lifecycle = store.decisionAwaitingProviderAcknowledgment {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("decision.status.sent")
+                        if let provider = lifecycle.provider, let project = lifecycle.projectName {
+                            Text("\(provider.capitalized) · \(project)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    Spacer()
                 }
-                metric("Tokens", value: "—", color: Color.white.opacity(0.38))
-                    .help("The current Codex hook does not provide token usage telemetry.")
-                Spacer(minLength: 0)
-                connectionBadge
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("decision.awaitingProviderAck")
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(Color.white.opacity(0.025))
         }
 
-        private func metric(_ title: String, value: String, color: Color) -> some View {
-            HStack(spacing: 5) {
-                Text(title)
-                    .foregroundStyle(Color.white.opacity(0.48))
-                Text(value)
-                    .foregroundStyle(color)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
+        private var panelActions: some View {
+            HStack(spacing: 16) {
+                Button(action: coordinator.openControlCenter) {
+                    Label("menu.openControlCenter", systemImage: "macwindow")
+                }
+                .accessibilityIdentifier("notch.openControlCenter")
+
+                SettingsLink {
+                    Label("menu.settings", systemImage: "gearshape")
+                }
+                .accessibilityIdentifier("notch.openSettings")
+
+                Spacer()
+
+                Button(action: coordinator.toggleNotificationSound) {
+                    Label(
+                        coordinator.isNotificationSoundEnabled ? "settings.sound.on" : "settings.sound.off",
+                        systemImage: coordinator.isNotificationSoundEnabled ? "speaker.wave.2" : "speaker.slash"
+                    )
+                }
+                .accessibilityIdentifier("notch.toggleSound")
             }
             .font(.caption)
-        }
-
-        private var connectionBadge: some View {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(connectionColor)
-                    .frame(width: 6, height: 6)
-                Text(connectionTitle)
-            }
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(Color.white.opacity(0.58))
-        }
-
-        private var connectionColor: Color {
-            switch store.connectionState {
-            case .online: .green
-            case .loading: .blue
-            case .offline, .error: .orange
-            }
-        }
-
-        private var connectionTitle: String {
-            switch store.connectionState {
-            case .online: "Live"
-            case .loading: "Connecting"
-            case .offline, .error: "Offline"
-            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.white.opacity(0.035))
         }
 
         private func sessionCard(_ session: SessionListItem) -> some View {
-            HStack(alignment: .top, spacing: 12) {
-                QuietAgentGlyph(isAnimating: !session.state.isTerminal)
-                    .padding(.top, 3)
-
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 8) {
-                        Text(session.projectName)
-                            .font(.callout.weight(.semibold))
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        providerBadge(session.adapterID.rawValue)
-                        stateBadge(session.state)
-                    }
-
-                    HStack(spacing: 6) {
-                        Text("You:")
-                            .foregroundStyle(Color.white.opacity(0.34))
-                        Text("Agent task in progress")
-                            .foregroundStyle(Color.white.opacity(0.57))
-                            .lineLimit(1)
-                    }
-                    .font(.caption)
-
-                    HStack(spacing: 14) {
-                        Label {
-                            TimelineView(.periodic(from: .now, by: 1)) { context in
-                                Text(NotchPanelFormatting.elapsed(from: session.startedAt, to: context.date))
-                                    .monospacedDigit()
-                            }
-                        } icon: {
-                            Image(systemName: "clock")
-                        }
-                        Label {
-                            Text(session.lastMeaningfulEventAt, style: .relative)
-                        } icon: {
-                            Image(systemName: "waveform.path.ecg")
-                        }
-                        Label("Tokens unavailable", systemImage: "gauge.with.dots.needle.0percent")
-                            .help("Token usage is not included in current provider hook events.")
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(Color.white.opacity(0.4))
-                }
-            }
-            .padding(13)
-            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .stroke(Color.white.opacity(0.075))
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { store.selectSession(session.id) }
-            .accessibilityElement(children: .combine)
-        }
-
-        private func providerBadge(_ provider: String) -> some View {
-            Text(provider.capitalized)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.blue)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.blue.opacity(0.13), in: Capsule())
-        }
-
-        private func stateBadge(_ state: SessionState) -> some View {
-            Text(NotchPanelFormatting.stateTitle(state))
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(stateColor(state))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(stateColor(state).opacity(0.12), in: Capsule())
-        }
-
-        private func stateColor(_ state: SessionState) -> Color {
-            switch state {
-            case .waitingApproval, .waitingInput: .orange
-            case .failed: .red
-            case .completed: .green
-            case .paused, .cancelled, .disconnected, .stale: Color.white.opacity(0.5)
-            default: .blue
+            NotchSessionCard(session: session) {
+                store.selectSession(session.id)
             }
         }
 
@@ -350,7 +261,7 @@
                     Image(systemName: "bell.badge.fill")
                         .foregroundStyle(.orange)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(alert.kind.rawValue).font(.callout.bold())
+                        Text(NotchPanelFormatting.alertTitle(alert.kind)).font(.callout.bold())
                         Text("\(Int(alert.observedDurationSeconds / 60)) min")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -362,7 +273,7 @@
                 sessionCard(session)
                     .padding(AgentControlSpacing.standard)
             } else {
-                Text("Agent activity updated")
+                Text("notch.activityUpdated")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(AgentControlSpacing.standard)
@@ -370,25 +281,4 @@
         }
     }
 
-    /// A deliberately quiet always-on indicator: it only blinks briefly every four seconds.
-    private struct QuietAgentGlyph: View {
-        let isAnimating: Bool
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-        var body: some View {
-            TimelineView(.animation(minimumInterval: 0.25, paused: !isAnimating || reduceMotion)) { context in
-                let phase = context.date.timeIntervalSinceReferenceDate
-                    .truncatingRemainder(dividingBy: 4)
-                let isBlinking = isAnimating && !reduceMotion && phase < 0.25
-
-                Image("YusufiwtBrandGlyph")
-                    .resizable()
-                    .frame(width: 16, height: 16)
-                    .opacity(isBlinking ? 0.58 : 0.92)
-            }
-            .frame(width: 18, height: 18)
-            .opacity(isAnimating ? 1 : 0.55)
-            .accessibilityHidden(true)
-        }
-    }
 #endif

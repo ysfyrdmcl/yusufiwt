@@ -61,6 +61,43 @@ struct EventEnvelopeTests {
         #expect(JSONValue.bool(false).stringValue == nil)
     }
 
+    @Test("Usage updates round trip without changing metric semantics")
+    func usageUpdateRoundTrip() throws {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let update = SessionUsageUpdate(metrics: [SessionUsageMetric(
+            provider: AdapterID("gemini"),
+            kind: .tokenCounts,
+            total: 480,
+            inputTokens: 400,
+            outputTokens: 80,
+            source: "usageMetadata",
+            updatedAt: timestamp
+        )], concurrentState: .running)
+        let envelope = try EventEnvelope(
+            eventID: EventID(UUID()),
+            eventType: "session.usageUpdated",
+            source: EventSource(adapterID: AdapterID("gemini"), adapterVersion: "1", nodeID: NodeID(UUID())),
+            sessionID: SessionID(UUID()),
+            sequence: 2,
+            occurredAt: timestamp,
+            receivedAt: timestamp,
+            payload: JSONValue.encoding(update),
+            privacyClass: .publicMetadata,
+            correlationID: EnvelopeID(UUID()),
+            schemaHash: "sha256:usage-v1"
+        )
+
+        guard case let .usageUpdated(decoded) = envelope.domainEvent else {
+            Issue.record("Expected a usage update")
+            return
+        }
+        let metric = try #require(decoded.metrics.first)
+        #expect(metric.kind == .tokenCounts)
+        #expect(metric.total == 480)
+        #expect(metric.remainingPercent == nil)
+        #expect(try EventEnvelope.decodeBounded(JSONEncoder().encode(envelope)).domainEvent == .usageUpdated(update))
+    }
+
     @Test("Invalid timestamps fail with a typed protocol error")
     func invalidTimestamp() throws {
         let text = try #require(String(data: fixture("event-envelope-v1"), encoding: .utf8))

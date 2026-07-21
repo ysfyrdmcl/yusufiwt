@@ -1,1 +1,1 @@
-{"session_id":"gemini-session","cwd":"/private/tmp/work","hook_event_name":"BeforeTool","timestamp":"2026-07-17T20:00:01Z","tool_name":"run_shell_command","requires_approval":true,"tool_input":{"command":"swift test"}}
+{"session_id":"gemini-session","cwd":"/private/tmp/work","hook_event_name":"BeforeTool","timestamp":"2026-07-17T20:00:01Z","tool_name":"run_shell_command","tool_input":{"command":"swift test"}}

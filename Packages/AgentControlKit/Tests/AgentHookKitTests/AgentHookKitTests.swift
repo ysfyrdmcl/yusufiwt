@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AgentDomain
 import AgentHookKit
 import AgentLocalIPC
@@ -38,11 +39,13 @@ struct AgentHookKitTests {
         )
         #expect(resolution.resolutionDisposition == .accepted)
         #expect(await response.decisionValue?.decision == .approve)
-        #expect(try await stack.database.eventCount() == 1)
+        // The request and helper-owned `sentToProvider` transition are both
+        // append-only audit events; provider application is still a later event.
+        #expect(try await stack.database.eventCount() == 2)
         await stack.runtime.gracefulShutdown()
     }
 
-    @Test("Missing helper returns native fallback and spools the event")
+    @Test("Missing helper returns native fallback without replaying synchronous decisions")
     func nativeFallbackAndSpool() async throws {
         let paths = try phase4TemporaryPaths()
         try paths.prepare()
@@ -57,10 +60,47 @@ struct AgentHookKitTests {
         #expect(response.neutralValue == .helperUnavailable)
 
         let spool = HookSpool(directory: paths.spoolDirectory)
-        #expect(try await spool.pendingCount() == 1)
+        #expect(try await spool.pendingCount() == 0)
         let emitResponse = await hook.emit(request.submission)
         #expect(emitResponse.eventDisposition == .spooled)
-        #expect(try await spool.pendingCount() == 2)
+        #expect(try await spool.pendingCount() == 1)
+    }
+
+    @Test("A decision reconnects after helper restart without duplicate pending work")
+    func decisionReconnect() async throws {
+        let paths = try phase4TemporaryPaths()
+        try paths.prepare()
+        let request = phase4DecisionRequest(timeout: 2000)
+        let hook = AgentControlHookClient(configuration: HookConfiguration(
+            socketURL: paths.socketURL,
+            spoolDirectory: paths.spoolDirectory,
+            decisionTimeoutMilliseconds: 2250
+        ))
+        async let providerResponse = hook.requestDecision(request)
+
+        // The hook starts while the helper is unavailable, as it would during a restart.
+        try await Task.sleep(for: .milliseconds(180))
+        let stack = try await phase4Runtime(paths: paths)
+        let server = UnixSocketServer(socketURL: paths.socketURL) { value in
+            await stack.runtime.handle(value)
+        }
+        try server.start()
+        defer { server.stop() }
+        await stack.runtime.setSocketAcceptingConnections(true)
+        try await waitUntilPending(request.requestID, runtime: stack.runtime)
+        guard case let .pendingDecisions(pending) = await stack.runtime.handle(.pendingDecisions) else {
+            Issue.record("Pending decision endpoint returned the wrong response")
+            return
+        }
+        #expect(pending.count == 1)
+        #expect(await stack.runtime.handle(.resolveDecision(.init(
+            requestID: request.requestID,
+            revision: request.revision,
+            decision: .approve
+        ))).resolutionDisposition == .accepted)
+        #expect(await providerResponse.decisionValue?.decision == .approve)
+        #expect(try await HookSpool(directory: paths.spoolDirectory).pendingCount() == 0)
+        await stack.runtime.gracefulShutdown()
     }
 
     @Test("Decision broker validates revision, answer choices, and timeout")
@@ -367,3 +407,5 @@ private extension HelperResponse {
         return value
     }
 }
+
+// swiftlint:enable file_length

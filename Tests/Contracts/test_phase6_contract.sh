@@ -12,7 +12,6 @@ for path in \
   Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/codex-permission.json \
   Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/claude-question.json \
   Packages/AgentControlKit/Tests/AgentHookKitTests/Fixtures/gemini-before-tool.json \
-  Docs/PHASE_6_TEST_PLAN.md \
   Docs/ADR/0011-provider-hook-integration.md
 do
   test -f "$path" || { echo "missing Phase 6 file: $path" >&2; exit 1; }

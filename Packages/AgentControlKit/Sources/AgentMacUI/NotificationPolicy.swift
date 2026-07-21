@@ -26,6 +26,8 @@
         public var enabled: Bool
         public var soundEnabled: Bool
         public var decisionNotificationsEnabled: Bool
+        public var approvalNotificationsEnabled: Bool
+        public var questionPlanNotificationsEnabled: Bool
         public var completedNotificationsEnabled: Bool
         public var failedNotificationsEnabled: Bool
         public var longRunningIdleNotificationsEnabled: Bool
@@ -37,6 +39,8 @@
             enabled: Bool = true,
             soundEnabled: Bool = true,
             decisionNotificationsEnabled: Bool = true,
+            approvalNotificationsEnabled: Bool? = nil,
+            questionPlanNotificationsEnabled: Bool? = nil,
             completedNotificationsEnabled: Bool = true,
             failedNotificationsEnabled: Bool = true,
             longRunningIdleNotificationsEnabled: Bool = true,
@@ -47,12 +51,67 @@
             self.enabled = enabled
             self.soundEnabled = soundEnabled
             self.decisionNotificationsEnabled = decisionNotificationsEnabled
+            self.approvalNotificationsEnabled = approvalNotificationsEnabled ?? decisionNotificationsEnabled
+            self.questionPlanNotificationsEnabled = questionPlanNotificationsEnabled ?? decisionNotificationsEnabled
             self.completedNotificationsEnabled = completedNotificationsEnabled
             self.failedNotificationsEnabled = failedNotificationsEnabled
             self.longRunningIdleNotificationsEnabled = longRunningIdleNotificationsEnabled
             self.focusAware = focusAware
             self.quietHours = quietHours
             self.privacyLevel = privacyLevel
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case enabled, soundEnabled, decisionNotificationsEnabled
+            case approvalNotificationsEnabled, questionPlanNotificationsEnabled
+            case completedNotificationsEnabled, failedNotificationsEnabled
+            case longRunningIdleNotificationsEnabled, focusAware, quietHours, privacyLevel
+        }
+
+        public init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+            soundEnabled = try values.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
+            let legacyDecisions = try values.decodeIfPresent(Bool.self, forKey: .decisionNotificationsEnabled) ?? true
+            decisionNotificationsEnabled = legacyDecisions
+            approvalNotificationsEnabled = try values.decodeIfPresent(
+                Bool.self, forKey: .approvalNotificationsEnabled
+            ) ?? legacyDecisions
+            questionPlanNotificationsEnabled = try values.decodeIfPresent(
+                Bool.self, forKey: .questionPlanNotificationsEnabled
+            ) ?? legacyDecisions
+            completedNotificationsEnabled = try values.decodeIfPresent(
+                Bool.self, forKey: .completedNotificationsEnabled
+            ) ?? true
+            failedNotificationsEnabled = try values.decodeIfPresent(Bool.self, forKey: .failedNotificationsEnabled) ?? true
+            longRunningIdleNotificationsEnabled = try values.decodeIfPresent(
+                Bool.self, forKey: .longRunningIdleNotificationsEnabled
+            ) ?? true
+            focusAware = try values.decodeIfPresent(Bool.self, forKey: .focusAware) ?? true
+            quietHours = try values.decodeIfPresent(QuietHours.self, forKey: .quietHours)
+            privacyLevel = try values.decodeIfPresent(NotificationPrivacyLevel.self, forKey: .privacyLevel) ?? .generic
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var values = encoder.container(keyedBy: CodingKeys.self)
+            try values.encode(enabled, forKey: .enabled)
+            try values.encode(soundEnabled, forKey: .soundEnabled)
+            try values.encode(decisionNotificationsEnabled, forKey: .decisionNotificationsEnabled)
+            try values.encode(approvalNotificationsEnabled, forKey: .approvalNotificationsEnabled)
+            try values.encode(questionPlanNotificationsEnabled, forKey: .questionPlanNotificationsEnabled)
+            try values.encode(completedNotificationsEnabled, forKey: .completedNotificationsEnabled)
+            try values.encode(failedNotificationsEnabled, forKey: .failedNotificationsEnabled)
+            try values.encode(longRunningIdleNotificationsEnabled, forKey: .longRunningIdleNotificationsEnabled)
+            try values.encode(focusAware, forKey: .focusAware)
+            try values.encodeIfPresent(quietHours, forKey: .quietHours)
+            try values.encode(privacyLevel, forKey: .privacyLevel)
+        }
+
+        public func decisionsEnabled(for kind: HookDecisionKind) -> Bool {
+            switch kind {
+            case .approval: approvalNotificationsEnabled
+            case .question, .plan: questionPlanNotificationsEnabled
+            }
         }
     }
 
@@ -118,7 +177,7 @@
         }
 
         private static func key(_ decision: PendingHookDecision) -> String {
-            "\(decision.requestID.uuidString.lowercased()):\(decision.revision)"
+            "\(decision.requestID.uuidString.lowercased()):\(decision.revision):\(decision.kind.rawValue)"
         }
     }
 #endif

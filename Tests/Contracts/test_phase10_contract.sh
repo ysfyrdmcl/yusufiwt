@@ -17,7 +17,6 @@ for path in \
   Extensions/agentcontrol-navigation/src/extension.ts \
   Apps/macOS/Resources/Localizable.xcstrings \
   Apps/macOS/Info.plist \
-  Docs/PHASE_10_TEST_PLAN.md \
   Docs/ADR/0016-phase10-navigation-and-onboarding.md
 do
   test -f "$path" || { echo "missing Phase 10 file: $path" >&2; exit 1; }

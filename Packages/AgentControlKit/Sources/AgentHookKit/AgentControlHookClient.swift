@@ -31,13 +31,25 @@
                 let boundedRequestTimeout = min(request.waitTimeoutMilliseconds, 60000)
                 timeout = min(timeout, Int32(boundedRequestTimeout + 250))
             }
-            let response = await send(.requestDecision(request), timeoutMilliseconds: timeout)
-            guard response.shouldSpool else { return response }
-            if let data = try? JSONEncoder().encode(request.submission) {
-                let spool = HookSpool(directory: configuration.spoolDirectory)
-                _ = try? await spool.enqueue(data)
-            }
-            return .neutral(reason: response.neutralReason ?? .helperUnavailable)
+            let deadline = Date().addingTimeInterval(Double(timeout) / 1000)
+            var response: HelperResponse
+            repeat {
+                let remaining = max(1, min(
+                    timeout,
+                    Int32(max(1, deadline.timeIntervalSinceNow * 1000))
+                ))
+                response = await send(.requestDecision(request), timeoutMilliseconds: remaining)
+                guard response.neutralReason == .helperUnavailable,
+                      deadline.timeIntervalSinceNow > 0,
+                      request.expiresAt.map({ $0 > Date() }) ?? true
+                else { break }
+                try? await Task.sleep(for: .milliseconds(100))
+            } while !Task.isCancelled
+            // A synchronous decision cannot be answered after its provider hook has
+            // already fallen back. Replaying its submission as a normal event would
+            // create permanent, non-actionable `waitingApproval` state after restart.
+            // Ordinary telemetry still uses `emit` and remains safely spoolable.
+            return response
         }
 
         public func doctor() async -> HelperResponse {

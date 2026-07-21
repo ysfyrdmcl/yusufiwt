@@ -32,6 +32,7 @@
         public let configURL: URL
         public let lastEventAt: Date?
         public let compatibilityWarning: String?
+        public let unsupportedCapabilityReasons: [AgentCapability: String]
 
         public init(
             provider: HookProvider,
@@ -40,7 +41,8 @@
             capabilities: CapabilityMatrix,
             configURL: URL,
             lastEventAt: Date? = nil,
-            compatibilityWarning: String? = nil
+            compatibilityWarning: String? = nil,
+            unsupportedCapabilityReasons: [AgentCapability: String] = [:]
         ) {
             self.provider = provider
             self.state = state
@@ -49,6 +51,7 @@
             self.configURL = configURL
             self.lastEventAt = lastEventAt
             self.compatibilityWarning = compatibilityWarning
+            self.unsupportedCapabilityReasons = unsupportedCapabilityReasons
         }
     }
 
@@ -80,7 +83,7 @@
 
         public func scan() async -> [AgentIntegrationRecord] {
             var records: [AgentIntegrationRecord] = []
-            for provider in [HookProvider.codex, .claude, .gemini] {
+            for provider in [HookProvider.codex, .claude, .gemini, .cursor] {
                 await records.append(record(provider))
             }
             return records
@@ -187,7 +190,11 @@
                 detectedVersion: detected?.version,
                 capabilities: detected?.capabilities ?? CapabilityMatrix(supported: [.monitorSessions]),
                 configURL: installation.configURL,
-                compatibilityWarning: known || detected == nil ? nil : "Unknown major version; monitoring only."
+                compatibilityWarning: known || detected == nil ? nil : "integrations.warning.unknownMajor",
+                unsupportedCapabilityReasons: provider == .cursor ? [
+                    .answerQuestions: "integrations.cursor.questionsUnavailable",
+                    .reviewPlans: "integrations.cursor.plansUnavailable"
+                ] : [:]
             )
         }
 

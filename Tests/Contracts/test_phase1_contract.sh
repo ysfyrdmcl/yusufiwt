@@ -4,7 +4,6 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
 
-test -f Docs/PHASE_1_TEST_PLAN.md
 test -f Docs/ADR/0009-domain-and-wire-contract.md
 grep -q 'public enum SessionState' Packages/AgentControlKit/Sources/AgentDomain/StateMachine/SessionStateMachine.swift
 grep -q 'public enum ApprovalStatus' Packages/AgentControlKit/Sources/AgentDomain/StateMachine/ApprovalStateMachine.swift

@@ -75,6 +75,7 @@ public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
     public var endedAt: Date?
     public var lastMeaningfulEventAt: Date
     public var snapshotRevision: Int64
+    public var usageMetrics: [SessionUsageMetric]
 
     public init(
         id: SessionID,
@@ -88,7 +89,8 @@ public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
         startedAt: Date,
         endedAt: Date?,
         lastMeaningfulEventAt: Date,
-        snapshotRevision: Int64
+        snapshotRevision: Int64,
+        usageMetrics: [SessionUsageMetric] = []
     ) {
         self.id = id
         self.nodeID = nodeID
@@ -102,6 +104,29 @@ public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
         self.endedAt = endedAt
         self.lastMeaningfulEventAt = lastMeaningfulEventAt
         self.snapshotRevision = snapshotRevision
+        self.usageMetrics = usageMetrics
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, nodeID, adapterID, externalSessionID, project, terminalContext, parentSessionID
+        case state, startedAt, endedAt, lastMeaningfulEventAt, snapshotRevision, usageMetrics
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(SessionID.self, forKey: .id)
+        nodeID = try container.decode(NodeID.self, forKey: .nodeID)
+        adapterID = try container.decode(AdapterID.self, forKey: .adapterID)
+        externalSessionID = try container.decodeIfPresent(String.self, forKey: .externalSessionID)
+        project = try container.decode(ProjectReference.self, forKey: .project)
+        terminalContext = try container.decodeIfPresent(TerminalContext.self, forKey: .terminalContext)
+        parentSessionID = try container.decodeIfPresent(SessionID.self, forKey: .parentSessionID)
+        state = try container.decode(SessionState.self, forKey: .state)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        endedAt = try container.decodeIfPresent(Date.self, forKey: .endedAt)
+        lastMeaningfulEventAt = try container.decode(Date.self, forKey: .lastMeaningfulEventAt)
+        snapshotRevision = try container.decode(Int64.self, forKey: .snapshotRevision)
+        usageMetrics = try container.decodeIfPresent([SessionUsageMetric].self, forKey: .usageMetrics) ?? []
     }
 }
 

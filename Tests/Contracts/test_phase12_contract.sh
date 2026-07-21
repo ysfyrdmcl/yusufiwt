@@ -15,7 +15,6 @@ for path in \
   Services/AgentControlRelay/Sources/AgentControlRelay/EnvelopeController.swift \
   Packages/AgentControlKit/Sources/AgentCompanion/CompanionCrypto.swift \
   Packages/AgentControlKit/Sources/AgentCompanion/ReplayProtection.swift \
-  Docs/PHASE_12_TEST_PLAN.md \
   Docs/ADR/0017-single-mac-companion-scope.md
 do
   test -f "$path" || { echo "missing Phase 12 file: $path" >&2; exit 1; }

@@ -60,7 +60,7 @@ private struct ActiveAgentsWidget: Widget {
                     YusufiwtBrandGlyph(size: 18)
                     Text(String(localized: "Active agents"))
                 }
-                    .font(.headline).foregroundStyle(.tint)
+                .font(.headline).foregroundStyle(.tint)
                 Text(entry.snapshot.activeAgentCount, format: .number)
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                 if let completed = entry.snapshot.lastCompletedTask {
@@ -90,7 +90,7 @@ private struct PendingApprovalsWidget: Widget {
                     YusufiwtBrandGlyph(size: 18)
                     Text(String(localized: "Pending approvals"))
                 }
-                    .font(.headline).foregroundStyle(.orange)
+                .font(.headline).foregroundStyle(.orange)
                 Text(entry.snapshot.pendingApprovalCount, format: .number)
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                 Text(String(localized: "Open yusufiwt to review"))

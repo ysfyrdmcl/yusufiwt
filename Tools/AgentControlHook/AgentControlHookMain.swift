@@ -79,7 +79,11 @@ enum AgentControlHookMain {
                     try writeJSON(mapper.providerOutput(for: responses, mapping: mapping))
                     return
                 } else {
-                    response = await client.emit(mapping.submission, notification: true)
+                    var latest = HelperResponse.neutral(reason: .helperUnavailable)
+                    for submission in mapping.submissions {
+                        latest = await client.emit(submission, notification: true)
+                    }
+                    response = latest
                 }
                 try writeJSON(mapper.providerOutput(for: response, mapping: mapping))
                 return

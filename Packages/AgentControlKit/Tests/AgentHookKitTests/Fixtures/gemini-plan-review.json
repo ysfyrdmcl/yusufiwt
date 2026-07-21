@@ -1,0 +1,1 @@
+{"session_id":"gemini-plan","cwd":"/private/tmp/work","hook_event_name":"BeforeTool","timestamp":"2026-07-17T20:00:01Z","tool_name":"exit_plan_mode","tool_input":{"plan_path":"/private/tmp/work/.gemini/plans/implementation.md"}}

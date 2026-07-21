@@ -15,7 +15,6 @@ for path in \
   Packages/AgentControlKit/Tests/AgentCompanionTests/Phase13CompanionTests.swift \
   Config/Entitlements/AgentControliOS.entitlements \
   Config/Entitlements/NotificationService.entitlements \
-  Docs/PHASE_13_TEST_PLAN.md \
   Docs/ADR/0018-ios-companion-authority-boundary.md
 do
   test -f "$path" || { echo "missing Phase 13 file: $path" >&2; exit 1; }

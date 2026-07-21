@@ -47,6 +47,45 @@ struct LocalIPCFixture: Sendable {
         )
         return HelperEventSubmission(envelope: envelope, initialSession: initial)
     }
+
+    func usageSubmission(sequence: Int64, remainingPercent: Double) throws -> HelperEventSubmission {
+        let metric = SessionUsageMetric(
+            provider: AdapterID("test"),
+            kind: .quotaRemaining,
+            remainingPercent: remainingPercent,
+            source: "fixture",
+            updatedAt: date.addingTimeInterval(Double(sequence))
+        )
+        let update = SessionUsageUpdate(metrics: [metric], concurrentState: .running)
+        let envelope = try EventEnvelope(
+            eventID: EventID(UUID()),
+            eventType: "session.usageUpdated",
+            source: EventSource(adapterID: AdapterID("test"), adapterVersion: "1", nodeID: nodeID),
+            sessionID: sessionID,
+            sequence: sequence,
+            occurredAt: date.addingTimeInterval(Double(sequence)),
+            receivedAt: date.addingTimeInterval(Double(sequence)),
+            payload: JSONValue.encoding(update),
+            privacyClass: .publicMetadata,
+            correlationID: EnvelopeID(UUID()),
+            schemaHash: "test"
+        )
+        let initial = AgentSession(
+            id: sessionID,
+            nodeID: nodeID,
+            adapterID: AdapterID("test"),
+            externalSessionID: nil,
+            project: ProjectReference(id: projectID, name: "Test", rootURL: URL(fileURLWithPath: "/tmp/Test")),
+            terminalContext: nil,
+            parentSessionID: nil,
+            state: .discovered,
+            startedAt: date,
+            endedAt: nil,
+            lastMeaningfulEventAt: date,
+            snapshotRevision: 0
+        )
+        return HelperEventSubmission(envelope: envelope, initialSession: initial)
+    }
 }
 
 func temporaryPaths() throws -> AgentControlPaths {

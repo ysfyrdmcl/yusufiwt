@@ -1,0 +1,14 @@
+{
+  "session_id": "claude-usage-session",
+  "cwd": "/private/tmp/work",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Read",
+  "tool_use_id": "claude-usage-tool-1",
+  "tool_response": {
+    "totalTokens": 900,
+    "usage": {
+      "input_tokens": 700,
+      "output_tokens": 200
+    }
+  }
+}

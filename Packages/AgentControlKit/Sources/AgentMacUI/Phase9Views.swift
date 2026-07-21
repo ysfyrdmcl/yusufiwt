@@ -35,7 +35,9 @@
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(item.projectName).font(.headline)
-                                Text("\(item.adapterID.rawValue.capitalized) • \(item.state.rawValue)")
+                                (Text(item.adapterID.rawValue.capitalized)
+                                    + Text(" • ")
+                                    + Text(LocalizedStringKey(NotchPanelFormatting.stateTitleKey(item.state))))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -228,8 +230,10 @@
 
         var detail: String {
             switch self {
-            case let .alert(rule): "\(rule.kind.rawValue) • \(Int(rule.thresholdSeconds / 60)) min"
-            case let .automation(rule): rule.actionKinds.map(\.rawValue).sorted().joined(separator: ", ")
+            case let .alert(rule):
+                "\(NotchPanelFormatting.alertTitle(rule.kind)) • \(Int(rule.thresholdSeconds / 60)) min"
+            case let .automation(rule):
+                rule.actionKinds.map { NotchPanelFormatting.automationTitle($0) }.sorted().joined(separator: ", ")
             }
         }
     }
@@ -244,7 +248,9 @@
             Form {
                 TextField("rules.name", text: $name)
                 Picker("rules.condition", selection: $kind) {
-                    ForEach(SessionAlertKind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(SessionAlertKind.allCases, id: \.self) {
+                        Text(NotchPanelFormatting.alertTitle($0)).tag($0)
+                    }
                 }
                 Stepper(value: $minutes, in: 1 ... 1440) {
                     Text("rules.minutes") + Text(" \(minutes)")
