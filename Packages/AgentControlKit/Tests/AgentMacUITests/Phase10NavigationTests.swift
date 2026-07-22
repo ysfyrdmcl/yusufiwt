@@ -108,6 +108,26 @@
             }
         }
 
+        @Test("Stop availability requires a fresh exact target and never supports Warp fallback")
+        @MainActor
+        func stopAvailability() {
+            let now = Date(timeIntervalSince1970: 1_784_320_000)
+            let stopper = TerminalStopCoordinator(maximumContextAge: 60)
+            #expect(stopper.availability(
+                for: context(bundleID: "com.microsoft.VSCode", paneID: "terminal"), at: now
+            ) == .available)
+            #expect(stopper.availability(
+                for: TerminalContext(
+                    applicationBundleID: "com.microsoft.VSCode", correlationToken: "session-token",
+                    capturedAt: now.addingTimeInterval(-61)
+                ),
+                at: now
+            ) == .contextStale)
+            #expect(stopper.availability(
+                for: context(bundleID: "dev.warp.Warp-Stable", paneID: nil), at: now
+            ) == .unsupportedTerminal)
+        }
+
         @Test("Interrupted onboarding checkpoints safely without touching provider configuration")
         @MainActor
         func onboardingCheckpoint() throws {

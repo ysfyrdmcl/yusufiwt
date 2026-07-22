@@ -152,13 +152,15 @@ extension DatabaseActor {
         connection: SQLiteConnection
     ) throws {
         let session = write.snapshot
+        let activitySummaryValue: SQLiteValue = try session.activitySummary
+            .map { .blob(try encoder.encode($0)) } ?? .null
         try connection.execute(
             """
             INSERT INTO agent_sessions(
                 id, provider_session_id, adapter_id, adapter_version, node_id, project_id,
                 parent_session_id, state, started_at, ended_at, last_meaningful_event_at,
-                snapshot_revision, terminal_context_id, usage_metrics
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                snapshot_revision, terminal_context_id, usage_metrics, activity_summary
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 provider_session_id = excluded.provider_session_id,
                 adapter_version = excluded.adapter_version,
@@ -167,7 +169,8 @@ extension DatabaseActor {
                 last_meaningful_event_at = excluded.last_meaningful_event_at,
                 snapshot_revision = excluded.snapshot_revision,
                 terminal_context_id = excluded.terminal_context_id,
-                usage_metrics = excluded.usage_metrics
+                usage_metrics = excluded.usage_metrics,
+                activity_summary = excluded.activity_summary
             WHERE excluded.snapshot_revision > agent_sessions.snapshot_revision
             """,
             bindings: [
@@ -179,7 +182,8 @@ extension DatabaseActor {
                 session.endedAt.map { .real($0.timeIntervalSince1970) } ?? .null,
                 .real(session.lastMeaningfulEventAt.timeIntervalSince1970), .integer(session.snapshotRevision),
                 terminalID.map(SQLiteValue.text) ?? .null,
-                .blob(encoder.encode(session.usageMetrics))
+                .blob(encoder.encode(session.usageMetrics)),
+                activitySummaryValue
             ]
         )
     }

@@ -42,6 +42,10 @@
         private var highlightedAlertID: String?
         @ObservationIgnored
         private var isObservingStore = false
+        @ObservationIgnored
+        private var outsideClickGlobalMonitor: Any?
+        @ObservationIgnored
+        private var outsideClickLocalMonitor: Any?
 
         public init(
             store: AgentControlStore,
@@ -89,6 +93,7 @@
         public func stop() {
             collapseTask?.cancel()
             collapseTask = nil
+            stopOutsideClickMonitoring()
             isObservingStore = false
             for observer in observers {
                 NotificationCenter.default.removeObserver(observer)
@@ -211,7 +216,10 @@
             let compactWidth = max(430, notchWidth + 280)
             let headerHeight = max(40, notchHeight)
             let visibleRows = min(4, store.liveSessions().count + store.pendingDecisions.count)
-            let expandedDetailHeight = min(440, max(250, 78 + CGFloat(visibleRows) * 96))
+            let expandedDetailHeight = NotchPanelSizing.expandedDetailHeight(
+                visibleRowCount: visibleRows,
+                hasContent: visibleRows > 0
+            )
             return switch mode {
             case .compact:
                 CGSize(width: compactWidth, height: headerHeight)
@@ -236,6 +244,43 @@
             if makeKey {
                 panel.makeKey()
             }
+            updateOutsideClickMonitoring()
+        }
+
+        private func updateOutsideClickMonitoring() {
+            guard mode == .expanded else {
+                stopOutsideClickMonitoring()
+                return
+            }
+            guard outsideClickGlobalMonitor == nil, outsideClickLocalMonitor == nil else { return }
+            let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+            outsideClickGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self,
+                          NotchPanelDismissal.shouldCollapse(mode: self.mode, eventBelongsToPanel: false)
+                    else { return }
+                    self.setExpanded(false)
+                }
+            }
+            outsideClickLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self] event in
+                guard let self else { return event }
+                let belongsToPanel = event.window === self.panel
+                if NotchPanelDismissal.shouldCollapse(mode: self.mode, eventBelongsToPanel: belongsToPanel) {
+                    self.setExpanded(false)
+                }
+                return event
+            }
+        }
+
+        private func stopOutsideClickMonitoring() {
+            if let outsideClickGlobalMonitor {
+                NSEvent.removeMonitor(outsideClickGlobalMonitor)
+            }
+            if let outsideClickLocalMonitor {
+                NSEvent.removeMonitor(outsideClickLocalMonitor)
+            }
+            outsideClickGlobalMonitor = nil
+            outsideClickLocalMonitor = nil
         }
 
         private func observeStore() {

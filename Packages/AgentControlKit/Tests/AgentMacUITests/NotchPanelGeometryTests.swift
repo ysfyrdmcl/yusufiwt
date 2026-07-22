@@ -21,6 +21,20 @@ struct NotchPanelGeometryTests {
         #expect(NotchPanelFormatting.stateTitleKey(.waitingApproval) == "status.waitingApproval")
     }
 
+    @Test("Empty expanded content reserves enough height for its message and actions")
+    func emptyExpandedSizing() {
+        #expect(NotchPanelSizing.expandedDetailHeight(visibleRowCount: 0, hasContent: false) == 340)
+        #expect(NotchPanelSizing.expandedDetailHeight(visibleRowCount: 0, hasContent: true) == 250)
+        #expect(NotchPanelSizing.expandedDetailHeight(visibleRowCount: 4, hasContent: true) == 440)
+    }
+
+    @Test("Only clicks outside an expanded panel request collapse")
+    func outsideClickDismissal() {
+        #expect(NotchPanelDismissal.shouldCollapse(mode: .expanded, eventBelongsToPanel: false))
+        #expect(!NotchPanelDismissal.shouldCollapse(mode: .expanded, eventBelongsToPanel: true))
+        #expect(!NotchPanelDismissal.shouldCollapse(mode: .compact, eventBelongsToPanel: false))
+    }
+
     @Test("Older helper snapshots remain decodable without a start date")
     func legacySessionListItemDecoding() throws {
         let json = """

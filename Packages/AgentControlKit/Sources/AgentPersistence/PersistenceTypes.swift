@@ -76,6 +76,8 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
     public let lastMeaningfulEventAt: Date
     public let snapshotRevision: Int64
     public let usageMetrics: [SessionUsageMetric]
+    public let activitySummary: SessionActivitySummary?
+    public let terminalContext: TerminalContext?
 
     public init(
         id: SessionID,
@@ -85,7 +87,9 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
         startedAt: Date,
         lastMeaningfulEventAt: Date,
         snapshotRevision: Int64,
-        usageMetrics: [SessionUsageMetric] = []
+        usageMetrics: [SessionUsageMetric] = [],
+        activitySummary: SessionActivitySummary? = nil,
+        terminalContext: TerminalContext? = nil
     ) {
         self.id = id
         self.projectName = projectName
@@ -95,10 +99,13 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
         self.lastMeaningfulEventAt = lastMeaningfulEventAt
         self.snapshotRevision = snapshotRevision
         self.usageMetrics = usageMetrics
+        self.activitySummary = activitySummary
+        self.terminalContext = terminalContext
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, projectName, adapterID, state, startedAt, lastMeaningfulEventAt, snapshotRevision, usageMetrics
+        case activitySummary, terminalContext
     }
 
     public init(from decoder: Decoder) throws {
@@ -111,6 +118,8 @@ public struct SessionListItem: Codable, Sendable, Equatable, Identifiable {
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt) ?? lastMeaningfulEventAt
         snapshotRevision = try container.decode(Int64.self, forKey: .snapshotRevision)
         usageMetrics = try container.decodeIfPresent([SessionUsageMetric].self, forKey: .usageMetrics) ?? []
+        activitySummary = try container.decodeIfPresent(SessionActivitySummary.self, forKey: .activitySummary)
+        terminalContext = try container.decodeIfPresent(TerminalContext.self, forKey: .terminalContext)
     }
 }
 

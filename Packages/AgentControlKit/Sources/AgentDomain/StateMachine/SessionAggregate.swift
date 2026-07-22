@@ -39,6 +39,13 @@ public struct SessionAggregate: Sendable {
         session.endedAt = endedAt
     }
 
+    public mutating func updateActivitySummary(_ summary: SessionActivitySummary?) {
+        guard let summary, summary.updatedAt >= (session.activitySummary?.updatedAt ?? .distantPast) else { return }
+        guard session.activitySummary != summary else { return }
+        session.activitySummary = summary
+        session.snapshotRevision += 1
+    }
+
     private func validateOrdering(_ event: SequencedAgentEvent) -> EventApplicationResult? {
         if processedEventIDs.contains(event.id) {
             return .duplicate

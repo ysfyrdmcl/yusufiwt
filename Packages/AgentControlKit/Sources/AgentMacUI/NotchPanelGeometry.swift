@@ -51,6 +51,19 @@
         }
     }
 
+    public enum NotchPanelSizing {
+        public static func expandedDetailHeight(visibleRowCount: Int, hasContent: Bool) -> CGFloat {
+            let minimumHeight: CGFloat = hasContent ? 250 : 340
+            return min(440, max(minimumHeight, 78 + CGFloat(max(0, visibleRowCount)) * 96))
+        }
+    }
+
+    public enum NotchPanelDismissal {
+        public static func shouldCollapse(mode: NotchPanelMode, eventBelongsToPanel: Bool) -> Bool {
+            mode == .expanded && !eventBelongsToPanel
+        }
+    }
+
     public enum FloatingPanelPlacement {
         public static func frame(
             panelSize: CGSize,

@@ -62,6 +62,23 @@ public struct TerminalContext: Codable, Hashable, Sendable {
     }
 }
 
+public struct SessionActivitySummary: Codable, Hashable, Sendable {
+    public enum Kind: String, Codable, Sendable {
+        case working, inspectingFiles, usingTool, planning, waitingApproval, waitingInput
+        case completed, failed, stopped
+    }
+
+    public let kind: Kind
+    public let detail: String?
+    public let updatedAt: Date
+
+    public init(kind: Kind, detail: String? = nil, updatedAt: Date) {
+        self.kind = kind
+        self.detail = detail
+        self.updatedAt = updatedAt
+    }
+}
+
 public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
     public let id: SessionID
     public let nodeID: NodeID
@@ -76,6 +93,7 @@ public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
     public var lastMeaningfulEventAt: Date
     public var snapshotRevision: Int64
     public var usageMetrics: [SessionUsageMetric]
+    public var activitySummary: SessionActivitySummary?
 
     public init(
         id: SessionID,
@@ -90,7 +108,8 @@ public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
         endedAt: Date?,
         lastMeaningfulEventAt: Date,
         snapshotRevision: Int64,
-        usageMetrics: [SessionUsageMetric] = []
+        usageMetrics: [SessionUsageMetric] = [],
+        activitySummary: SessionActivitySummary? = nil
     ) {
         self.id = id
         self.nodeID = nodeID
@@ -105,11 +124,12 @@ public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
         self.lastMeaningfulEventAt = lastMeaningfulEventAt
         self.snapshotRevision = snapshotRevision
         self.usageMetrics = usageMetrics
+        self.activitySummary = activitySummary
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, nodeID, adapterID, externalSessionID, project, terminalContext, parentSessionID
-        case state, startedAt, endedAt, lastMeaningfulEventAt, snapshotRevision, usageMetrics
+        case state, startedAt, endedAt, lastMeaningfulEventAt, snapshotRevision, usageMetrics, activitySummary
     }
 
     public init(from decoder: any Decoder) throws {
@@ -127,6 +147,7 @@ public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
         lastMeaningfulEventAt = try container.decode(Date.self, forKey: .lastMeaningfulEventAt)
         snapshotRevision = try container.decode(Int64.self, forKey: .snapshotRevision)
         usageMetrics = try container.decodeIfPresent([SessionUsageMetric].self, forKey: .usageMetrics) ?? []
+        activitySummary = try container.decodeIfPresent(SessionActivitySummary.self, forKey: .activitySummary)
     }
 }
 

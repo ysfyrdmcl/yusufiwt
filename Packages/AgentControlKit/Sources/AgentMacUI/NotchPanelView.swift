@@ -249,9 +249,21 @@
         }
 
         private func sessionCard(_ session: SessionListItem) -> some View {
-            NotchSessionCard(session: session) {
-                store.selectSession(session.id)
-            }
+            NotchSessionCard(
+                session: session,
+                stopAvailability: store.stopAvailability(for: session),
+                stopFeedback: store.sessionStopFeedback[session.id],
+                openChat: {
+                    Task {
+                        if await store.openChat(sessionID: session.id) {
+                            coordinator.setExpanded(false)
+                        } else {
+                            coordinator.openControlCenter()
+                        }
+                    }
+                },
+                stop: { Task { await store.stopSession(session) } }
+            )
         }
 
         @ViewBuilder

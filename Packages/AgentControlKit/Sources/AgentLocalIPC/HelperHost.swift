@@ -6,11 +6,18 @@
         public let runtime: HelperRuntime
         public let socketServer: UnixSocketServer
         public let xpcListener: HelperXPCListener
+        private let transcriptMonitor: TranscriptSessionMonitor
 
-        private init(runtime: HelperRuntime, socketServer: UnixSocketServer, xpcListener: HelperXPCListener) {
+        private init(
+            runtime: HelperRuntime,
+            socketServer: UnixSocketServer,
+            xpcListener: HelperXPCListener,
+            transcriptMonitor: TranscriptSessionMonitor
+        ) {
             self.runtime = runtime
             self.socketServer = socketServer
             self.xpcListener = xpcListener
+            self.transcriptMonitor = transcriptMonitor
         }
 
         public static func make(
@@ -32,7 +39,13 @@
                 await runtime.handle(request)
             }
             let xpc = HelperXPCListener(runtime: runtime, authorizationPolicy: authorizationPolicy)
-            return HelperHost(runtime: runtime, socketServer: socket, xpcListener: xpc)
+            let transcriptMonitor = TranscriptSessionMonitor(runtime: runtime)
+            return HelperHost(
+                runtime: runtime,
+                socketServer: socket,
+                xpcListener: xpc,
+                transcriptMonitor: transcriptMonitor
+            )
         }
 
         public func start() async throws {
@@ -40,9 +53,11 @@
             try socketServer.start()
             await runtime.setSocketAcceptingConnections(true)
             xpcListener.start()
+            await transcriptMonitor.start()
         }
 
         public func stop() async {
+            await transcriptMonitor.stop()
             xpcListener.stop()
             socketServer.stop()
             await runtime.gracefulShutdown()

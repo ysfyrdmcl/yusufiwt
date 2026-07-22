@@ -9,13 +9,28 @@ extension DatabaseActor {
         return try rows.first.map(decodeSession)
     }
 
+    public func sessionAdapterVersion(id: SessionID) throws -> String? {
+        guard let connection else { throw PersistenceError.databaseClosed }
+        guard let value = try connection.query(
+            "SELECT adapter_version FROM agent_sessions WHERE id = ? LIMIT 1",
+            bindings: [.text(id.description)]
+        ).first?.first else { return nil }
+        guard case let .text(version) = value else {
+            throw PersistenceError.invalidStoredValue("agent_sessions.adapter_version")
+        }
+        return version
+    }
+
     public func sessions(state: SessionState? = nil, limit: Int = 100) throws -> [SessionListItem] {
         guard let connection else { throw PersistenceError.databaseClosed }
         let boundedLimit = max(1, min(limit, 1000))
         var sql = """
         SELECT s.id, p.display_name, s.adapter_id, s.state, s.started_at,
-               s.last_meaningful_event_at, s.snapshot_revision, s.usage_metrics
+               s.last_meaningful_event_at, s.snapshot_revision, s.usage_metrics, s.activity_summary,
+               t.application_bundle_id, t.process_id, t.window_identifier, t.tab_identifier,
+               t.pane_identifier, t.workspace_uri, t.correlation_token, t.captured_at
         FROM agent_sessions s JOIN projects p ON p.id = s.project_id
+        LEFT JOIN terminal_contexts t ON t.id = s.terminal_context_id
         """
         var bindings: [SQLiteValue] = []
         if let state {
@@ -107,7 +122,7 @@ extension DatabaseActor {
     }
 
     private func decodeSession(_ row: [SQLiteValue]) throws -> AgentSession {
-        guard row.count == 25,
+        guard row.count == 26,
               let sessionUUID = Self.uuid(row[0]), let adapter = Self.string(row[2]),
               let nodeUUID = Self.uuid(row[4]), let projectUUID = Self.uuid(row[13]),
               let projectName = Self.string(row[14]), let rootString = Self.string(row[15]),
@@ -122,7 +137,8 @@ extension DatabaseActor {
             startedAt: Date(timeIntervalSince1970: started),
             endedAt: Self.double(row[9]).map(Date.init(timeIntervalSince1970:)),
             lastMeaningfulEventAt: Date(timeIntervalSince1970: activity), snapshotRevision: revision,
-            usageMetrics: Self.decodeUsageMetrics(row[24])
+            usageMetrics: Self.decodeUsageMetrics(row[24]),
+            activitySummary: Self.decodeActivitySummary(row[25])
         )
     }
 
@@ -139,7 +155,7 @@ extension DatabaseActor {
     }
 
     private static func decodeSessionListItem(_ row: [SQLiteValue]) throws -> SessionListItem {
-        guard row.count == 8, let id = uuid(row[0]), let projectName = string(row[1]),
+        guard row.count == 17, let id = uuid(row[0]), let projectName = string(row[1]),
               let adapter = string(row[2]), let stateName = string(row[3]),
               let state = SessionState(rawValue: stateName), let started = double(row[4]),
               let activity = double(row[5]), let revision = int(row[6])
@@ -148,8 +164,32 @@ extension DatabaseActor {
             id: SessionID(id), projectName: projectName, adapterID: AdapterID(adapter), state: state,
             startedAt: Date(timeIntervalSince1970: started),
             lastMeaningfulEventAt: Date(timeIntervalSince1970: activity), snapshotRevision: revision,
-            usageMetrics: decodeUsageMetrics(row[7])
+            usageMetrics: decodeUsageMetrics(row[7]),
+            activitySummary: decodeActivitySummary(row[8]),
+            terminalContext: decodeListTerminal(row)
         )
+    }
+
+    private static func decodeListTerminal(_ row: [SQLiteValue]) -> TerminalContext? {
+        guard let bundleID = string(row[9]), let token = string(row[15]), let captured = double(row[16]) else {
+            return nil
+        }
+        return TerminalContext(
+            applicationBundleID: bundleID, processID: int(row[10]).map(Int32.init),
+            windowIdentifier: string(row[11]), tabIdentifier: string(row[12]), paneIdentifier: string(row[13]),
+            workspaceURI: string(row[14]).flatMap(URL.init(string:)), correlationToken: token,
+            capturedAt: Date(timeIntervalSince1970: captured)
+        )
+    }
+
+    private static func decodeActivitySummary(_ value: SQLiteValue) throws -> SessionActivitySummary? {
+        if case .null = value { return nil }
+        guard let data = data(value) else { throw PersistenceError.invalidStoredValue("session activity summary") }
+        do {
+            return try JSONDecoder().decode(SessionActivitySummary.self, from: data)
+        } catch {
+            throw PersistenceError.invalidStoredValue("session activity summary")
+        }
     }
 
     private static func decodeUsageMetrics(_ value: SQLiteValue) throws -> [SessionUsageMetric] {
@@ -181,7 +221,7 @@ extension DatabaseActor {
            p.id, p.display_name, p.redacted_path,
            t.application_bundle_id, t.process_id, t.window_identifier, t.tab_identifier,
            t.pane_identifier, t.workspace_uri, t.correlation_token, t.captured_at,
-           s.usage_metrics
+           s.usage_metrics, s.activity_summary
     FROM agent_sessions s
     JOIN projects p ON p.id = s.project_id
     LEFT JOIN terminal_contexts t ON t.id = s.terminal_context_id

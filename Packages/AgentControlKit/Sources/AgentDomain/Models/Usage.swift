@@ -11,6 +11,10 @@ public enum UsageMetricPrecision: String, Codable, Sendable, Hashable {
     case estimated
 }
 
+public enum UsageQuotaWindow: String, Codable, Sendable, Hashable {
+    case weekly
+}
+
 public struct SessionUsageUpdate: Codable, Sendable, Equatable {
     public let metrics: [SessionUsageMetric]
     public let concurrentState: SessionState?
@@ -37,6 +41,8 @@ public struct SessionUsageMetric: Codable, Sendable, Hashable {
     public let precision: UsageMetricPrecision
     public let source: String
     public let updatedAt: Date
+    public let quotaWindow: UsageQuotaWindow?
+    public let resetsAt: Date?
 
     public init(
         provider: AdapterID,
@@ -49,7 +55,9 @@ public struct SessionUsageMetric: Codable, Sendable, Hashable {
         remainingPercent: Double? = nil,
         precision: UsageMetricPrecision = .exact,
         source: String,
-        updatedAt: Date
+        updatedAt: Date,
+        quotaWindow: UsageQuotaWindow? = nil,
+        resetsAt: Date? = nil
     ) {
         self.provider = provider
         self.kind = kind
@@ -60,6 +68,8 @@ public struct SessionUsageMetric: Codable, Sendable, Hashable {
         self.precision = precision
         self.source = source
         self.updatedAt = updatedAt
+        self.quotaWindow = quotaWindow
+        self.resetsAt = resetsAt
 
         let safeRemaining = Self.nonnegative(remaining)
         if kind == .contextRemaining, let total = self.total, let used = self.used {
@@ -78,7 +88,7 @@ public struct SessionUsageMetric: Codable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case provider, kind, total, used, remaining, inputTokens, outputTokens
-        case remainingPercent, precision, source, updatedAt
+        case remainingPercent, precision, source, updatedAt, quotaWindow, resetsAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -94,7 +104,9 @@ public struct SessionUsageMetric: Codable, Sendable, Hashable {
             remainingPercent: container.decodeIfPresent(Double.self, forKey: .remainingPercent),
             precision: container.decodeIfPresent(UsageMetricPrecision.self, forKey: .precision) ?? .exact,
             source: container.decode(String.self, forKey: .source),
-            updatedAt: container.decode(Date.self, forKey: .updatedAt)
+            updatedAt: container.decode(Date.self, forKey: .updatedAt),
+            quotaWindow: container.decodeIfPresent(UsageQuotaWindow.self, forKey: .quotaWindow),
+            resetsAt: container.decodeIfPresent(Date.self, forKey: .resetsAt)
         )
     }
 
@@ -111,6 +123,8 @@ public struct SessionUsageMetric: Codable, Sendable, Hashable {
         try container.encode(precision, forKey: .precision)
         try container.encode(source, forKey: .source)
         try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encodeIfPresent(quotaWindow, forKey: .quotaWindow)
+        try container.encodeIfPresent(resetsAt, forKey: .resetsAt)
     }
 
     public func isStale(

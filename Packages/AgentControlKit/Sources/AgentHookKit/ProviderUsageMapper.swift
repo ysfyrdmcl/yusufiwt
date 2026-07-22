@@ -45,13 +45,23 @@
                 ["usage", "quotaRemainingPercent"], ["quota_remaining_percent"]
             ]
             guard let match = firstNumber(in: fields, paths: paths) else { return nil }
+            let isWeekly = firstString(in: fields, paths: [
+                ["quota", "window"], ["rate_limit", "window"], ["rateLimit", "window"],
+                ["usage", "quota_window"], ["usage", "quotaWindow"], ["quota_window"]
+            ]).map { ["week", "weekly", "7d", "7_day", "7-day"].contains($0.lowercased()) } ?? false
+            let reset = firstDate(in: fields, paths: [
+                ["quota", "resets_at"], ["rate_limit", "resets_at"], ["rateLimit", "resetsAt"],
+                ["usage", "quota_resets_at"], ["usage", "quotaResetsAt"], ["quota_resets_at"]
+            ])
             return SessionUsageMetric(
                 provider: provider,
                 kind: .quotaRemaining,
                 remainingPercent: match.value,
                 precision: precision(fields),
                 source: match.path,
-                updatedAt: updatedAt
+                updatedAt: updatedAt,
+                quotaWindow: isWeekly ? .weekly : nil,
+                resetsAt: reset
             )
         }
 
@@ -200,6 +210,30 @@
             for path in paths {
                 guard let value = value(in: fields, at: path), let integer = integer(value) else { continue }
                 return (integer, path.joined(separator: "."))
+            }
+            return nil
+        }
+
+        private func firstString(in fields: [String: JSONValue], paths: [[String]]) -> String? {
+            for path in paths {
+                guard let value = value(in: fields, at: path)?.stringValue else { continue }
+                return value
+            }
+            return nil
+        }
+
+        private func firstDate(in fields: [String: JSONValue], paths: [[String]]) -> Date? {
+            for path in paths {
+                guard let value = value(in: fields, at: path) else { continue }
+                switch value {
+                case let .string(raw):
+                    if let date = ISO8601DateFormatter().date(from: raw) { return date }
+                    if let seconds = Double(raw) { return Date(timeIntervalSince1970: seconds) }
+                case let .number(seconds) where seconds.isFinite:
+                    return Date(timeIntervalSince1970: seconds)
+                default:
+                    continue
+                }
             }
             return nil
         }

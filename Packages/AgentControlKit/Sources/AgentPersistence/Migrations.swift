@@ -19,7 +19,9 @@ public struct DatabaseMigration: Sendable, Equatable {
 }
 
 public enum AgentControlMigrations {
-    public static let all: [DatabaseMigration] = [initialSchema, phase9Indexes, sessionUsageSnapshot]
+    public static let all: [DatabaseMigration] = [
+        initialSchema, phase9Indexes, sessionUsageSnapshot, sessionActivitySummary
+    ]
 
     public static let initialSchema = DatabaseMigration(
         version: 1,
@@ -258,6 +260,14 @@ public enum AgentControlMigrations {
         name: "session_usage_snapshot",
         statements: [
             "ALTER TABLE agent_sessions ADD COLUMN usage_metrics BLOB"
+        ]
+    )
+
+    public static let sessionActivitySummary = DatabaseMigration(
+        version: 4,
+        name: "session_activity_summary",
+        statements: [
+            "ALTER TABLE agent_sessions ADD COLUMN activity_summary BLOB"
         ]
     )
 }

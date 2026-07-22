@@ -11,6 +11,7 @@
         public let helpKey: String
         public let isAvailable: Bool
         public let isStale: Bool
+        public let resetsAt: Date?
 
         public init(
             session: SessionListItem?,
@@ -26,18 +27,19 @@
                   let value = Self.value(metric)
             else {
                 kind = nil
-                titleKey = "notch.tokens"
-                value = "—"
+                titleKey = "usage.weeklyLimit"
+                value = String(localized: "usage.weeklyUnavailable", defaultValue: "data unavailable")
                 sourceLabel = session.map { Self.sourceLabel($0) }
                 helpKey = "usage.providerUnavailable"
                 isAvailable = false
                 isStale = false
+                resetsAt = nil
                 return
             }
 
             kind = metric.kind
             titleKey = switch metric.kind {
-            case .quotaRemaining: "usage.quotaRemaining"
+            case .quotaRemaining: "usage.weeklyLimit"
             case .contextRemaining: "usage.contextRemaining"
             case .tokenCounts: "usage.tokenCounts"
             }
@@ -46,6 +48,7 @@
             isAvailable = true
             isStale = metric.isStale(at: referenceDate, staleAfter: staleAfter)
             helpKey = isStale ? "usage.stale" : titleKey
+            resetsAt = metric.resetsAt
         }
 
         private static func preferredMetric(
@@ -53,22 +56,15 @@
             at referenceDate: Date,
             staleAfter: TimeInterval
         ) -> SessionUsageMetric? {
-            let usable = metrics.filter { value($0) != nil }
+            let usable = metrics.filter {
+                $0.kind == .quotaRemaining && $0.quotaWindow == .weekly && value($0) != nil
+            }
             let fresh = usable.filter { !$0.isStale(at: referenceDate, staleAfter: staleAfter) }
             return preferred(in: fresh) ?? preferred(in: usable)
         }
 
         private static func preferred(in metrics: [SessionUsageMetric]) -> SessionUsageMetric? {
-            for kind in [
-                SessionUsageMetricKind.quotaRemaining,
-                .contextRemaining,
-                .tokenCounts
-            ] {
-                if let metric = metrics.filter({ $0.kind == kind }).max(by: { $0.updatedAt < $1.updatedAt }) {
-                    return metric
-                }
-            }
-            return nil
+            metrics.max(by: { $0.updatedAt < $1.updatedAt })
         }
 
         private static func value(_ metric: SessionUsageMetric) -> String? {

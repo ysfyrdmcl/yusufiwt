@@ -31,6 +31,11 @@ Phases 8–17 add decision UX, operations/navigation, encrypted companion
 surfaces, hardening, release pipelines, privacy-safe support, account deletion,
 emergency controls, and the evidence-backed 1.0 release gate.
 
+The macOS helper also discovers Codex and Claude Code sessions from their local
+structured JSONL transcripts when hooks are not installed. This monitor-only
+fallback polls every two seconds, groups subagents, and never persists prompt or
+assistant content; hook/app-server events remain authoritative when available.
+
 ```sh
 swift run agentcontrol-hook doctor
 swift run agentcontrol-hook provider-hook codex < codex-hook-input.json

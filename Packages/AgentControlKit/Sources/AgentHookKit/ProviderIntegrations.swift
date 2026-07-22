@@ -89,16 +89,18 @@
             switch provider {
             case .codex:
                 return CapabilityMatrix(supported: [
-                    .monitorSessions, .approveRequests, .denyRequests, .answerQuestions
+                    .monitorSessions, .approveRequests, .denyRequests, .answerQuestions, .stopSession
                 ])
             case .claude:
                 return CapabilityMatrix(supported: [
-                    .monitorSessions, .approveRequests, .denyRequests, .answerQuestions, .reviewPlans
+                    .monitorSessions, .approveRequests, .denyRequests, .answerQuestions, .reviewPlans, .stopSession
                 ])
             case .gemini:
-                return CapabilityMatrix(supported: [.monitorSessions, .approveRequests, .denyRequests, .reviewPlans])
+                return CapabilityMatrix(supported: [
+                    .monitorSessions, .approveRequests, .denyRequests, .reviewPlans, .stopSession
+                ])
             case .cursor:
-                return CapabilityMatrix(supported: [.monitorSessions, .approveRequests, .denyRequests])
+                return CapabilityMatrix(supported: [.monitorSessions, .approveRequests, .denyRequests, .stopSession])
             case .generic:
                 return CapabilityMatrix(supported: [.monitorSessions])
             }

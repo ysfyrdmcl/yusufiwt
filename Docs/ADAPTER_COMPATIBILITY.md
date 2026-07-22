@@ -10,6 +10,11 @@ Published: 2026-07-19. Machine-readable source:
 | Gemini CLI | 0.x, 1.x | Managed hook | Monitor, approve, deny, plan review | Monitor-only |
 | Cursor | 1.x–3.x | Managed hook + IDE navigation | Monitor, scoped write/delete/task and shell/MCP approve/deny, context usage | Monitor-only |
 
+Codex and Claude Code additionally support hook-free, monitor-only session
+discovery from bounded local JSONL transcript metadata. This fallback reports
+liveness and parent/subagent relationships only; it exposes no decision or
+usage capability and yields authority to structured events.
+
 These major ranges are covered by normalized fixtures and contract tests. A new
 major is never assumed compatible: decision controls are hidden until a fixture
 and matrix update ship. Generic hooks are always monitor-only. Cursor's current

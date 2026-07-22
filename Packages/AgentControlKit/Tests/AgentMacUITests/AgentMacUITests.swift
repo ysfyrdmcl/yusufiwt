@@ -59,6 +59,54 @@ struct AgentMacUITests {
         #expect(store.activeSessions.count == 100)
     }
 
+    @Test("Agent card opens only the exact registered chat target")
+    @MainActor
+    func cardOpensExactChat() async {
+        let now = Date()
+        let session = SessionListItem(
+            id: SessionID(UUID()), projectName: "Chat", adapterID: AdapterID("codex"), state: .running,
+            startedAt: now, lastMeaningfulEventAt: now, snapshotRevision: 1,
+            terminalContext: TerminalContext(
+                applicationBundleID: "com.microsoft.VSCode", paneIdentifier: "terminal",
+                correlationToken: "chat-token", capturedAt: now
+            )
+        )
+        let navigator = FixtureExactNavigator(result: NavigationResult(
+            level: .exactPane, applicationBundleID: "com.microsoft.VSCode", mechanism: "fixture"
+        ))
+        let store = AgentControlStore(
+            transport: FixtureUITransport(sessions: [session]), navigator: navigator,
+            terminalStopper: FixtureTerminalStopper(), refreshInterval: .seconds(60)
+        )
+        await store.refreshNow()
+        #expect(await store.openChat(sessionID: session.id))
+        #expect(navigator.exactCalls == 1)
+    }
+
+    @Test("Repeated stop actions send only one Control-C while acknowledgment is pending")
+    @MainActor
+    func stopDebounces() async {
+        let now = Date()
+        let session = SessionListItem(
+            id: SessionID(UUID()), projectName: "Stop", adapterID: AdapterID("claude"), state: .running,
+            startedAt: now, lastMeaningfulEventAt: now, snapshotRevision: 1,
+            terminalContext: TerminalContext(
+                applicationBundleID: "com.microsoft.VSCode", paneIdentifier: "terminal",
+                correlationToken: "stop-token", capturedAt: now
+            )
+        )
+        let stopper = FixtureTerminalStopper()
+        let store = AgentControlStore(
+            transport: FixtureUITransport(sessions: [session]), terminalStopper: stopper,
+            refreshInterval: .seconds(60)
+        )
+        await store.refreshNow()
+        await store.stopSession(session)
+        await store.stopSession(session)
+        #expect(stopper.stopCalls == 1)
+        #expect(store.sessionStopFeedback[session.id] == .signalSent)
+    }
+
     @Test("Usage follows the selected session or the latest active session")
     @MainActor
     func usageSessionSelection() async {
@@ -71,7 +119,7 @@ struct AgentMacUITests {
             snapshotRevision: 1,
             usageMetrics: [.init(
                 provider: AdapterID("codex"), kind: .quotaRemaining,
-                remainingPercent: 73, source: "fixture", updatedAt: now
+                remainingPercent: 73, source: "fixture", updatedAt: now, quotaWindow: .weekly
             )]
         )
         let latest = SessionListItem(
@@ -79,8 +127,8 @@ struct AgentMacUITests {
             startedAt: now.addingTimeInterval(-50), lastMeaningfulEventAt: now,
             snapshotRevision: 1,
             usageMetrics: [.init(
-                provider: AdapterID("claude"), kind: .contextRemaining,
-                total: 1000, used: 250, source: "fixture", updatedAt: now
+                provider: AdapterID("claude"), kind: .quotaRemaining,
+                remainingPercent: 75, source: "fixture", updatedAt: now, quotaWindow: .weekly
             )]
         )
         let store = AgentControlStore(
@@ -92,12 +140,12 @@ struct AgentMacUITests {
 
         store.selectSession(firstID)
         #expect(store.usagePresentation(at: now).value == "73%")
-        #expect(store.usagePresentation(at: now).titleKey == "usage.quotaRemaining")
+        #expect(store.usagePresentation(at: now).titleKey == "usage.weeklyLimit")
         #expect(SessionUsagePresentation(session: first, at: now.addingTimeInterval(301)).isStale)
         #expect(SessionUsagePresentation(session: SessionListItem(
             id: SessionID(UUID()), projectName: "No usage", adapterID: AdapterID("codex"),
             state: .running, startedAt: now, lastMeaningfulEventAt: now, snapshotRevision: 0
-        ), at: now).value == "—")
+        ), at: now).value == "data unavailable")
     }
 
     @Test("Registry notification refreshes structured usage without waiting for polling")
@@ -536,8 +584,19 @@ private actor FixtureUITransport: AgentControlTransport {
         )
     }
 
-    func session(id _: SessionID) async throws -> AgentSession? {
-        nil
+    func session(id: SessionID) async throws -> AgentSession? {
+        guard let item = sessionItems.first(where: { $0.id == id }) else { return nil }
+        return AgentSession(
+            id: item.id, nodeID: NodeID(UUID()), adapterID: item.adapterID, externalSessionID: "fixture",
+            project: ProjectReference(
+                id: ProjectID(UUID()), name: item.projectName,
+                rootURL: URL(fileURLWithPath: "/private/tmp/fixture", isDirectory: true)
+            ),
+            terminalContext: item.terminalContext, parentSessionID: nil, state: item.state,
+            startedAt: item.startedAt, endedAt: item.state.isTerminal ? item.lastMeaningfulEventAt : nil,
+            lastMeaningfulEventAt: item.lastMeaningfulEventAt, snapshotRevision: item.snapshotRevision,
+            usageMetrics: item.usageMetrics, activitySummary: item.activitySummary
+        )
     }
 
     func events(sessionID _: SessionID, limit _: Int) async throws -> [PersistedSessionEvent] {
@@ -561,5 +620,38 @@ private actor FixtureUITransport: AgentControlTransport {
     func disconnect() async {
         notificationContinuation?.finish()
         notificationContinuation = nil
+    }
+}
+
+@MainActor
+private final class FixtureExactNavigator: TerminalNavigating {
+    let result: NavigationResult
+    private(set) var exactCalls = 0
+
+    init(result: NavigationResult) {
+        self.result = result
+    }
+
+    func navigate(context _: TerminalContext?, projectURL _: URL?) async -> NavigationResult {
+        result
+    }
+
+    func navigateExact(context _: TerminalContext?) async -> NavigationResult {
+        exactCalls += 1
+        return result
+    }
+}
+
+@MainActor
+private final class FixtureTerminalStopper: TerminalStopping {
+    private(set) var stopCalls = 0
+
+    func availability(for _: TerminalContext?, at _: Date) -> SessionStopAvailability {
+        .available
+    }
+
+    func stop(context _: TerminalContext?) async -> SessionStopResult {
+        stopCalls += 1
+        return .signalSent
     }
 }

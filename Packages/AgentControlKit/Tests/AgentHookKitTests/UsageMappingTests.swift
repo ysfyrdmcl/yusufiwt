@@ -20,6 +20,32 @@ struct UsageMappingTests {
         #expect(counts.remainingPercent == nil)
     }
 
+    @Test("Only an explicitly weekly quota carries the weekly window and reset")
+    func weeklyQuotaWindow() throws {
+        let reset = "2026-07-27T00:00:00Z"
+        let metrics = ProviderUsageMapper().metrics(
+            provider: AdapterID("codex"),
+            fields: [
+                "rate_limit": .object([
+                    "remaining_percent": .number(64),
+                    "window": .string("weekly"),
+                    "resets_at": .string(reset)
+                ])
+            ],
+            updatedAt: updatedAt
+        )
+        let quota = try #require(metrics.first)
+        #expect(quota.quotaWindow == .weekly)
+        #expect(quota.resetsAt == ISO8601DateFormatter().date(from: reset))
+
+        let ordinary = ProviderUsageMapper().metrics(
+            provider: AdapterID("codex"),
+            fields: ["rate_limit": .object(["remaining_percent": .number(64)])],
+            updatedAt: updatedAt
+        )
+        #expect(ordinary.first?.quotaWindow == nil)
+    }
+
     @Test("Structured context total and used produce context remaining")
     func structuredContextUsage() throws {
         let metrics = try mappedMetrics(fixture: "structured-context-usage", provider: "generic")

@@ -45,6 +45,15 @@
         case helperUnavailable
     }
 
+    public enum SessionStopFeedback: Sendable, Equatable {
+        case sending
+        case signalSent
+        case stopped
+        case mayStillBeRunning
+        case unavailable(SessionStopAvailability)
+        case failed
+    }
+
     public struct ProviderIntegrationActivity: Sendable, Equatable {
         public let lastEventAt: Date?
         public let lastEventType: String?
@@ -101,6 +110,7 @@
         public private(set) var operationsError: String?
         public private(set) var lastRepairResult: RepairResult?
         public private(set) var lastNavigationResult: NavigationResult?
+        public private(set) var sessionStopFeedback: [SessionID: SessionStopFeedback] = [:]
         private var pendingNavigationToken: String?
         public var historyQuery = HistoryQuery()
         public var selectedSection: DashboardSection = .overview
@@ -153,6 +163,7 @@
         private let transport: any AgentControlTransport
         private let notificationCoordinator: MacNotificationCoordinator?
         private let navigator: any TerminalNavigating
+        private let terminalStopper: any TerminalStopping
         private let refreshInterval: Duration
         private var refreshTask: Task<Void, Never>?
         private var notificationTask: Task<Void, Never>?
@@ -161,11 +172,13 @@
             transport: any AgentControlTransport = XPCAgentControlTransport(),
             notificationCoordinator: MacNotificationCoordinator? = nil,
             navigator: (any TerminalNavigating)? = nil,
+            terminalStopper: (any TerminalStopping)? = nil,
             refreshInterval: Duration = .seconds(10)
         ) {
             self.transport = transport
             self.notificationCoordinator = notificationCoordinator
             self.navigator = navigator ?? TerminalNavigationCoordinator()
+            self.terminalStopper = terminalStopper ?? TerminalStopCoordinator()
             self.refreshInterval = refreshInterval
         }
 
@@ -235,6 +248,7 @@
                 let snapshot = try await transport.snapshot(sessionLimit: 1000)
                 helperHealth = snapshot.health
                 sessions = snapshot.sessions
+                reconcileStopFeedback()
                 pendingDecisions = Self.uniqueDecisions(snapshot.pendingDecisions)
                 decisionLifecycles = snapshot.decisionLifecycles
                 synchronizeAcknowledgmentStatuses()
@@ -265,6 +279,50 @@
                 return
             }
             Task { [weak self] in await self?.loadSession(id: id) }
+        }
+
+        public func stopAvailability(for session: SessionListItem, at date: Date = Date()) -> SessionStopAvailability {
+            guard !session.state.isTerminal else { return .exactTargetUnavailable }
+            return terminalStopper.availability(for: session.terminalContext, at: date)
+        }
+
+        @discardableResult
+        public func openChat(sessionID: SessionID) async -> Bool {
+            selectedSessionID = sessionID
+            await loadSession(id: sessionID)
+            guard let session = selectedSession else { return false }
+            pendingNavigationToken = session.terminalContext?.correlationToken
+            let result = await navigator.navigateExact(context: session.terminalContext)
+            lastNavigationResult = result
+            return result.level == .exactPane || result.mechanism == "extension-dispatched"
+        }
+
+        public func stopSession(_ session: SessionListItem) async {
+            guard sessionStopFeedback[session.id] != .sending,
+                  sessionStopFeedback[session.id] != .signalSent
+            else { return }
+            let availability = stopAvailability(for: session)
+            guard availability == .available else {
+                sessionStopFeedback[session.id] = .unavailable(availability)
+                return
+            }
+            sessionStopFeedback[session.id] = .sending
+            switch await terminalStopper.stop(context: session.terminalContext) {
+            case .signalSent:
+                sessionStopFeedback[session.id] = .signalSent
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(10))
+                    guard let self, self.sessionStopFeedback[session.id] == .signalSent else { return }
+                    await self.refreshNow()
+                    if self.sessionStopFeedback[session.id] == .signalSent {
+                        self.sessionStopFeedback[session.id] = .mayStillBeRunning
+                    }
+                }
+            case let .unavailable(reason):
+                sessionStopFeedback[session.id] = .unavailable(reason)
+            case .failed:
+                sessionStopFeedback[session.id] = .failed
+            }
         }
 
         public func selectDecision(_ requestID: UUID) {
@@ -636,7 +694,9 @@
                     startedAt: current.startedAt,
                     lastMeaningfulEventAt: Date(),
                     snapshotRevision: notification.snapshotRevision,
-                    usageMetrics: current.usageMetrics
+                    usageMetrics: current.usageMetrics,
+                    activitySummary: current.activitySummary,
+                    terminalContext: current.terminalContext
                 )
             }
             await refreshNow()
@@ -651,6 +711,14 @@
             } catch {
                 if sessions.isEmpty {
                     connectionState = .error(Self.safeMessage(error))
+                }
+            }
+        }
+
+        private func reconcileStopFeedback() {
+            for (id, feedback) in sessionStopFeedback where feedback == .signalSent || feedback == .sending {
+                if sessions.first(where: { $0.id == id })?.state.isTerminal == true {
+                    sessionStopFeedback[id] = .stopped
                 }
             }
         }

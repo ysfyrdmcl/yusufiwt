@@ -5,26 +5,53 @@
 
     struct NotchSessionCard: View {
         let session: SessionListItem
-        let select: () -> Void
+        let stopAvailability: SessionStopAvailability
+        let stopFeedback: SessionStopFeedback?
+        let openChat: () -> Void
+        let stop: () -> Void
+        @State private var isStopConfirmationPresented = false
 
         var body: some View {
-            Button(action: select) {
-                HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: 8) {
+                Button(action: openChat) {
+                    HStack(alignment: .top, spacing: 12) {
                     QuietAgentGlyph(isAnimating: !session.state.isTerminal)
                         .padding(.top, 3)
                     sessionSummary
+                    }
+                    .contentShape(Rectangle())
                 }
-                .padding(13)
-                .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .stroke(Color.white.opacity(0.075))
+                .buttonStyle(.plain)
+
+                Menu {
+                    Button("notch.openChat", systemImage: "arrow.up.forward.app", action: openChat)
+                    Button("notch.stopAgent", systemImage: "stop.circle", role: .destructive) {
+                        isStopConfirmationPresented = true
+                    }
+                    .disabled(stopAvailability != .available || stopFeedback == .sending || stopFeedback == .signalSent)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(Color.white.opacity(0.55))
+                        .padding(4)
                 }
-                .contentShape(Rectangle())
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help(stopHelp)
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
+            .padding(13)
+            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(Color.white.opacity(0.075))
+            }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("notch.session.\(session.id.description)")
+            .confirmationDialog("notch.stop.confirm.title", isPresented: $isStopConfirmationPresented) {
+                Button("notch.stopAgent", role: .destructive, action: stop)
+                Button("action.cancel", role: .cancel) {}
+            } message: {
+                Text("notch.stop.confirm.message")
+            }
         }
 
         private var sessionSummary: some View {
@@ -38,14 +65,21 @@
                     stateBadge
                 }
 
-                HStack(spacing: 6) {
-                    Text("notch.you")
-                        .foregroundStyle(Color.white.opacity(0.34))
-                    Text("notch.taskInProgress")
-                        .foregroundStyle(Color.white.opacity(0.57))
-                        .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(activityKey)
+                    if let detail = session.activitySummary?.detail {
+                        Text("· \(detail)")
+                    }
                 }
                 .font(.caption)
+                .foregroundStyle(Color.white.opacity(0.57))
+                .lineLimit(1)
+
+                if let stopFeedback {
+                    Text(stopFeedbackKey(stopFeedback))
+                        .font(.caption2)
+                        .foregroundStyle(stopFeedback == .failed || stopFeedback == .mayStillBeRunning ? .orange : .secondary)
+                }
 
                 HStack(spacing: 14) {
                     elapsedLabel
@@ -60,6 +94,42 @@
                 }
                 .font(.caption2)
                 .foregroundStyle(Color.white.opacity(0.4))
+            }
+        }
+
+        private var activityKey: LocalizedStringKey {
+            switch session.activitySummary?.kind {
+            case .inspectingFiles: "activity.inspectingFiles"
+            case .usingTool: "activity.usingTool"
+            case .planning: "activity.planning"
+            case .waitingApproval: "activity.waitingApproval"
+            case .waitingInput: "activity.waitingInput"
+            case .completed: "activity.completed"
+            case .failed: "activity.failed"
+            case .stopped: "activity.stopped"
+            case .working, nil: "activity.working"
+            }
+        }
+
+        private var stopHelp: LocalizedStringKey {
+            switch stopAvailability {
+            case .available: "notch.stop.help"
+            case .contextMissing: "notch.stop.unavailable.context"
+            case .contextStale: "notch.stop.unavailable.stale"
+            case .exactTargetUnavailable: "notch.stop.unavailable.target"
+            case .permissionRequired: "notch.stop.unavailable.permission"
+            case .unsupportedTerminal: "notch.stop.unavailable.terminal"
+            }
+        }
+
+        private func stopFeedbackKey(_ feedback: SessionStopFeedback) -> LocalizedStringKey {
+            switch feedback {
+            case .sending: "notch.stop.sending"
+            case .signalSent: "notch.stop.sent"
+            case .stopped: "notch.stop.stopped"
+            case .mayStillBeRunning: "notch.stop.timeout"
+            case .unavailable: "notch.stop.unavailable.target"
+            case .failed: "notch.stop.failed"
             }
         }
 
@@ -82,6 +152,10 @@
                     Text(presentation.value).monospacedDigit()
                     if presentation.isStale {
                         Text("usage.stale").foregroundStyle(.orange)
+                    }
+                    if let resetsAt = presentation.resetsAt {
+                        Text("·")
+                        Text(resetsAt, style: .relative)
                     }
                 }
             } icon: {

@@ -22,6 +22,12 @@ fallback, and Automation is requested only for a detected terminal after an
 explicit user action. These permissions are checked without prompting during
 normal notification-to-session navigation.
 
+For monitor-only fallback discovery, the helper reads a bounded prefix of local
+Codex and Claude Code JSONL transcript files to obtain session ID, working
+directory and parent-session metadata, and uses file modification time for
+liveness. Prompt, assistant and tool content is neither placed in events nor
+persisted. The fallback does not read terminal output or capture the screen.
+
 The optional Phase 12 relay stores account-subject hashes, public device keys,
 routing identifiers, expiry/sequence metadata and ciphertext. Prompt, command,
 path, source and decision content remain inside the end-to-end encrypted

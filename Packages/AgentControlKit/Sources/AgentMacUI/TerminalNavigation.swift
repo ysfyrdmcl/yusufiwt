@@ -222,6 +222,13 @@
     @MainActor
     public protocol TerminalNavigating: AnyObject {
         func navigate(context: TerminalContext?, projectURL: URL?) async -> NavigationResult
+        func navigateExact(context: TerminalContext?) async -> NavigationResult
+    }
+
+    public extension TerminalNavigating {
+        func navigateExact(context: TerminalContext?) async -> NavigationResult {
+            await navigate(context: context, projectURL: nil)
+        }
     }
 
     @MainActor
@@ -238,6 +245,18 @@
         }
 
         public func navigate(context: TerminalContext?, projectURL: URL?) async -> NavigationResult {
+            await navigate(context: context, projectURL: projectURL, exactOnly: false)
+        }
+
+        public func navigateExact(context: TerminalContext?) async -> NavigationResult {
+            await navigate(context: context, projectURL: nil, exactOnly: true)
+        }
+
+        private func navigate(
+            context: TerminalContext?,
+            projectURL: URL?,
+            exactOnly: Bool
+        ) async -> NavigationResult {
             let automation = Set([TerminalApplication.terminal, .iTerm2, .ghostty].flatMap(\.bundleIdentifiers).filter {
                 AutomationPermissionController.status(bundleID: $0, askUserIfNeeded: false) == .authorized
             })
@@ -246,7 +265,9 @@
                 automationAuthorizedBundleIDs: automation
             )
             let plan = planner.plan(context: context, projectURL: projectURL, permissions: permissions)
-            for attempt in plan.attempts where await execute(attempt) {
+            for attempt in plan.attempts {
+                guard !exactOnly || attempt.level == .exactPane else { continue }
+                guard await execute(attempt) else { continue }
                 if case .extensionURL = attempt, attempt.level == .exactPane {
                     return NavigationResult(
                         level: .application,
@@ -266,7 +287,8 @@
                 level: .unsupported,
                 applicationBundleID: plan.bundleID,
                 mechanism: "none",
-                reason: plan.attempts.isEmpty ? plan.fallbackReason ?? .contextMissing : .openFailed
+                reason: plan.attempts.isEmpty ? plan.fallbackReason ?? .contextMissing
+                    : exactOnly ? .exactTargetUnavailable : .openFailed
             )
         }
 

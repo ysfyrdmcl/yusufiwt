@@ -21,6 +21,8 @@
     public actor SessionRegistryActor {
         private let database: DatabaseActor
         private var aggregates: [SessionID: SessionAggregate] = [:]
+        private var authoritativeSessionIDs: Set<SessionID> = []
+        private var authorityCheckedSessionIDs: Set<SessionID> = []
         private var continuations: [UUID: AsyncStream<RegistryNotification>.Continuation] = [:]
 
         public init(database: DatabaseActor) {
@@ -38,6 +40,11 @@
                         session: snapshot,
                         lastSequenceBySource: sequences
                     )
+                    if let adapterVersion = try await database.sessionAdapterVersion(id: item.id),
+                       adapterVersion != "transcript-v1" {
+                        authoritativeSessionIDs.insert(item.id)
+                    }
+                    authorityCheckedSessionIDs.insert(item.id)
                     restored += 1
                 }
             }
@@ -48,6 +55,22 @@
             guard submission.envelope.sessionID == submission.initialSession.id,
                   submission.envelope.source.nodeID == submission.initialSession.nodeID
             else { throw LocalIPCError.malformedPayload }
+
+            if Self.isTranscriptFallback(submission.envelope) {
+                if !authorityCheckedSessionIDs.contains(submission.envelope.sessionID) {
+                    if let adapterVersion = try await database.sessionAdapterVersion(id: submission.envelope.sessionID),
+                       adapterVersion != "transcript-v1" {
+                        authoritativeSessionIDs.insert(submission.envelope.sessionID)
+                    }
+                    authorityCheckedSessionIDs.insert(submission.envelope.sessionID)
+                }
+                guard !authoritativeSessionIDs.contains(submission.envelope.sessionID) else { return .duplicate }
+            } else {
+                // Once a hook or managed adapter has spoken for a session, its
+                // structured events remain authoritative over transcript timing.
+                authoritativeSessionIDs.insert(submission.envelope.sessionID)
+                authorityCheckedSessionIDs.insert(submission.envelope.sessionID)
+            }
 
             var aggregate = aggregates[submission.envelope.sessionID]
                 ?? SessionAggregate(session: submission.initialSession)
@@ -68,6 +91,7 @@
                 lastMeaningfulEventAt: meaningfulAt,
                 endedAt: aggregate.session.state.isTerminal ? submission.envelope.receivedAt : aggregate.session.endedAt
             )
+            aggregate.updateActivitySummary(SessionActivitySummarizer().summary(for: submission.envelope))
             let snapshot = aggregate.session
             let appendResult = try await database.append(EventWrite(envelope: submission.envelope, snapshot: snapshot))
             guard appendResult == .appended else { return .duplicate }
@@ -121,6 +145,10 @@
                 return true
             }
             return false
+        }
+
+        private static func isTranscriptFallback(_ envelope: EventEnvelope) -> Bool {
+            envelope.source.adapterVersion == "transcript-v1"
         }
     }
 #endif

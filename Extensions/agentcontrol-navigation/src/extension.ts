@@ -12,7 +12,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand("agentcontrol.captureTerminalContext", captureTerminalContext),
     vscode.commands.registerCommand("agentcontrol.registerTerminal", registerTerminal),
-    vscode.window.registerUriHandler({ handleUri: revealTerminal }),
+    vscode.window.registerUriHandler({ handleUri: handleTerminalUri }),
     vscode.window.onDidCloseTerminal((terminal) => {
       for (const [token, registration] of registrations) {
         if (registration.terminal === terminal) registrations.delete(token);
@@ -47,13 +47,21 @@ async function registerTerminal(token?: string): Promise<void> {
   if (!captured) vscode.window.showWarningMessage("yusufiwt: no active terminal to register.");
 }
 
-async function revealTerminal(uri: vscode.Uri): Promise<void> {
-  if (uri.path !== "/reveal") return;
+async function handleTerminalUri(uri: vscode.Uri): Promise<void> {
+  if (uri.path !== "/reveal" && uri.path !== "/interrupt") return;
   const token = new URLSearchParams(uri.query).get("token");
   const registration = token ? registrations.get(token) : undefined;
   if (registration) {
     registration.terminal.show(false);
+    if (uri.path === "/interrupt") {
+      registration.terminal.sendText("\u0003", false);
+      return;
+    }
     await reportResult(token, "exactPane");
+    return;
+  }
+  if (uri.path === "/interrupt") {
+    vscode.window.showWarningMessage("yusufiwt could not safely find the registered terminal to stop.");
     return;
   }
   const workspace = new URLSearchParams(uri.query).get("workspace");
