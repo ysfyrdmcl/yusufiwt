@@ -79,6 +79,7 @@ struct TranscriptSessionMonitorTests {
     }
 
     @Test("Structured provider events take authority over transcript timing")
+    // swiftlint:disable:next function_body_length
     func structuredAuthority() async throws {
         let fixture = try TranscriptFixture()
         let file = fixture.codexRoot.appendingPathComponent("authority.jsonl")
@@ -93,7 +94,7 @@ struct TranscriptSessionMonitorTests {
         )
         let paths = try temporaryPaths()
         let stack = try await makeTestRuntime(paths: paths)
-        #expect(eventDisposition(await stack.runtime.handle(.submitEvent(fallback))) == .appended)
+        #expect(await eventDisposition(stack.runtime.handle(.submitEvent(fallback))) == .appended)
 
         let structuredEnvelope = EventEnvelope(
             eventID: EventID(UUID()),
@@ -112,7 +113,7 @@ struct TranscriptSessionMonitorTests {
             schemaHash: "structured-test"
         )
         let structured = HelperEventSubmission(envelope: structuredEnvelope, initialSession: fallback.initialSession)
-        #expect(eventDisposition(await stack.runtime.handle(.submitEvent(structured))) == .appended)
+        #expect(await eventDisposition(stack.runtime.handle(.submitEvent(structured))) == .appended)
 
         let lateFallback = TranscriptSessionMonitor.submission(
             for: observation,
@@ -121,7 +122,7 @@ struct TranscriptSessionMonitorTests {
             runningInterval: 20,
             receivedAt: fixture.now.addingTimeInterval(20)
         )
-        #expect(eventDisposition(await stack.runtime.handle(.submitEvent(lateFallback))) == .duplicate)
+        #expect(await eventDisposition(stack.runtime.handle(.submitEvent(lateFallback))) == .duplicate)
         #expect(await stack.registry.session(id: observation.sessionID)?.state == .waitingInput)
 
         let completionEnvelope = EventEnvelope(
@@ -138,21 +139,23 @@ struct TranscriptSessionMonitorTests {
             correlationID: EnvelopeID(UUID()),
             schemaHash: "structured-test"
         )
-        #expect(eventDisposition(await stack.runtime.handle(.submitEvent(HelperEventSubmission(
+        #expect(await eventDisposition(stack.runtime.handle(.submitEvent(HelperEventSubmission(
             envelope: completionEnvelope,
             initialSession: fallback.initialSession
         )))) == .appended)
         await stack.runtime.gracefulShutdown()
 
         let restarted = try await makeTestRuntime(paths: paths)
-        #expect(eventDisposition(await restarted.runtime.handle(.submitEvent(lateFallback))) == .duplicate)
+        #expect(await eventDisposition(restarted.runtime.handle(.submitEvent(lateFallback))) == .duplicate)
         #expect(try await restarted.database.session(id: observation.sessionID)?.state == .completed)
         await restarted.runtime.gracefulShutdown()
     }
 }
 
 private func eventDisposition(_ response: HelperResponse) -> EventAppendDisposition? {
-    if case let .eventAccepted(value) = response { return value }
+    if case let .eventAccepted(value) = response {
+        return value
+    }
     return nil
 }
 

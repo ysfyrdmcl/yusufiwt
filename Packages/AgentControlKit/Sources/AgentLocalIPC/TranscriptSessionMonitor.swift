@@ -164,6 +164,8 @@
             return (modified, values.creationDate ?? modified)
         }
 
+        // Mirrors the three optional metadata fields emitted by Codex transcript headers.
+        // swiftlint:disable:next large_tuple
         private func codexMetadata(from file: URL) -> (id: String?, cwd: String?, parentID: String?) {
             for object in metadataObjects(from: file) {
                 guard let payload = object["payload"] as? [String: Any] else { continue }
@@ -183,7 +185,9 @@
             for object in metadataObjects(from: file) {
                 sessionID = sessionID ?? object["sessionId"] as? String ?? object["session_id"] as? String
                 cwd = cwd ?? object["cwd"] as? String
-                if sessionID != nil, cwd != nil { break }
+                if sessionID != nil, cwd != nil {
+                    break
+                }
             }
             return (sessionID, cwd)
         }
@@ -272,6 +276,8 @@
             }
         }
 
+        // Event and initial-session construction stay together to preserve deterministic identifiers.
+        // swiftlint:disable:next function_body_length
         static func submission(
             for observation: TranscriptSessionObservation,
             state: SessionState,

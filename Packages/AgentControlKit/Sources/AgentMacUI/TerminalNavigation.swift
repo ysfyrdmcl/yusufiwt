@@ -1,4 +1,6 @@
 #if os(macOS)
+    // Navigation planning, execution, and permission checks form one auditable adapter boundary.
+    // swiftlint:disable file_length
     import AgentDomain
     import AppKit
     import ApplicationServices

@@ -15,9 +15,9 @@
             HStack(alignment: .top, spacing: 8) {
                 Button(action: openChat) {
                     HStack(alignment: .top, spacing: 12) {
-                    QuietAgentGlyph(isAnimating: !session.state.isTerminal)
-                        .padding(.top, 3)
-                    sessionSummary
+                        QuietAgentGlyph(isAnimating: !session.state.isTerminal)
+                            .padding(.top, 3)
+                        sessionSummary
                     }
                     .contentShape(Rectangle())
                 }

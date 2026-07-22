@@ -40,9 +40,15 @@
 
         private func inferredKind(from eventType: String) -> SessionActivitySummary.Kind {
             let lowered = eventType.lowercased()
-            if lowered.contains("plan") { return .planning }
-            if lowered.contains("file") || lowered.contains("search") { return .inspectingFiles }
-            if lowered.contains("tool") || lowered.contains("command") { return .usingTool }
+            if lowered.contains("plan") {
+                return .planning
+            }
+            if lowered.contains("file") || lowered.contains("search") {
+                return .inspectingFiles
+            }
+            if lowered.contains("tool") || lowered.contains("command") {
+                return .usingTool
+            }
             return .working
         }
 

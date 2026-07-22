@@ -153,7 +153,7 @@ extension DatabaseActor {
     ) throws {
         let session = write.snapshot
         let activitySummaryValue: SQLiteValue = try session.activitySummary
-            .map { .blob(try encoder.encode($0)) } ?? .null
+            .map { try .blob(encoder.encode($0)) } ?? .null
         try connection.execute(
             """
             INSERT INTO agent_sessions(

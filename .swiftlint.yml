@@ -6,6 +6,7 @@ included:
 excluded:
   - .build
   - Packages/AgentControlKit/.build
+  - Packages/AgentControlKit/build
   - Services/AgentControlRelay/.build
   - yusufiwt.xcodeproj
   - AgentControl.xcodeproj

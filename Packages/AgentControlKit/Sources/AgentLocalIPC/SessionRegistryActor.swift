@@ -51,6 +51,8 @@
             return restored
         }
 
+        // Ingestion keeps authority, ordering, persistence, and notification decisions atomic.
+        // swiftlint:disable:next cyclomatic_complexity function_body_length
         public func ingest(_ submission: HelperEventSubmission) async throws -> EventAppendDisposition {
             guard submission.envelope.sessionID == submission.initialSession.id,
                   submission.envelope.source.nodeID == submission.initialSession.nodeID

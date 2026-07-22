@@ -6,6 +6,7 @@ cd "$repo_root"
 
 swiftformat Apps Services Packages \
   --exclude Packages/AgentControlKit/.build \
+  --exclude Packages/AgentControlKit/build \
   --exclude Services/AgentControlRelay/.build \
   --lint --cache ignore
 swiftlint lint --strict --no-cache --force-exclude

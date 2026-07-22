@@ -1,4 +1,6 @@
 #if os(macOS)
+    // Coordinator and panel lifecycle types intentionally live together.
+    // swiftlint:disable file_length
     import AgentDomain
     import AgentPersistence
     import AppKit
@@ -259,14 +261,14 @@
                     guard let self,
                           NotchPanelDismissal.shouldCollapse(mode: self.mode, eventBelongsToPanel: false)
                     else { return }
-                    self.setExpanded(false)
+                    setExpanded(false)
                 }
             }
             outsideClickLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self] event in
                 guard let self else { return event }
-                let belongsToPanel = event.window === self.panel
-                if NotchPanelDismissal.shouldCollapse(mode: self.mode, eventBelongsToPanel: belongsToPanel) {
-                    self.setExpanded(false)
+                let belongsToPanel = event.window === panel
+                if NotchPanelDismissal.shouldCollapse(mode: mode, eventBelongsToPanel: belongsToPanel) {
+                    setExpanded(false)
                 }
                 return event
             }

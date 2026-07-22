@@ -3,6 +3,8 @@
     import AgentPersistence
     import SwiftUI
 
+    // The panel's view fragments share store and coordinator state within one SwiftUI view.
+    // swiftlint:disable:next type_body_length
     public struct FloatingPanelView: View {
         @Bindable var store: AgentControlStore
         let coordinator: FloatingPanelCoordinator

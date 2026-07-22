@@ -183,7 +183,9 @@ extension DatabaseActor {
     }
 
     private static func decodeActivitySummary(_ value: SQLiteValue) throws -> SessionActivitySummary? {
-        if case .null = value { return nil }
+        if case .null = value {
+            return nil
+        }
         guard let data = data(value) else { throw PersistenceError.invalidStoredValue("session activity summary") }
         do {
             return try JSONDecoder().decode(SessionActivitySummary.self, from: data)

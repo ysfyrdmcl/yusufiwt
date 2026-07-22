@@ -227,8 +227,12 @@
                 guard let value = value(in: fields, at: path) else { continue }
                 switch value {
                 case let .string(raw):
-                    if let date = ISO8601DateFormatter().date(from: raw) { return date }
-                    if let seconds = Double(raw) { return Date(timeIntervalSince1970: seconds) }
+                    if let date = ISO8601DateFormatter().date(from: raw) {
+                        return date
+                    }
+                    if let seconds = Double(raw) {
+                        return Date(timeIntervalSince1970: seconds)
+                    }
                 case let .number(seconds) where seconds.isFinite:
                     return Date(timeIntervalSince1970: seconds)
                 default:

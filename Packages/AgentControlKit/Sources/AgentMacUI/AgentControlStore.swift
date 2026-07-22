@@ -312,10 +312,10 @@
                 sessionStopFeedback[session.id] = .signalSent
                 Task { [weak self] in
                     try? await Task.sleep(for: .seconds(10))
-                    guard let self, self.sessionStopFeedback[session.id] == .signalSent else { return }
-                    await self.refreshNow()
-                    if self.sessionStopFeedback[session.id] == .signalSent {
-                        self.sessionStopFeedback[session.id] = .mayStillBeRunning
+                    guard let self, sessionStopFeedback[session.id] == .signalSent else { return }
+                    await refreshNow()
+                    if sessionStopFeedback[session.id] == .signalSent {
+                        sessionStopFeedback[session.id] = .mayStillBeRunning
                     }
                 }
             case let .unavailable(reason):

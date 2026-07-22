@@ -101,8 +101,10 @@
             return components.url
         }
 
+        // The inline AppleScripts are kept together so their target-selection behavior stays auditable.
+        // swiftlint:disable:next function_body_length
         private func interruptScript(for application: TerminalApplication) -> String {
-            let focusScript: String = switch application {
+            let focusScript = switch application {
             case .terminal:
                 """
                 tell application id "com.apple.Terminal"
