@@ -6,9 +6,9 @@ When several agents are working across different projects, yusufiwt brings their
 
 The current product scope is **Mac Local V1**. It runs on your Mac without a yusufiwt account or a hosted service. The interface supports English and Turkish.
 
-![yusufiwt Control Center displaying simulated agent sessions](Docs/Evidence/mac-local-v1-dashboard-localized.png)
+![yusufiwt's expanded notch panel showing an active Codex session](Docs/Evidence/mac-local-v1-notch-active.jpg)
 
-*Example interface with simulated agent sessions.*
+*The active notch panel shows live agent status and conversation context usage in a compact view.*
 
 ## What it does
 
