@@ -80,6 +80,11 @@
                         .font(.caption2)
                         .foregroundStyle(stopFeedback == .failed || stopFeedback == .mayStillBeRunning ? .orange : .secondary)
                 }
+                if stopAvailability == .codexConnectionRequired {
+                    Text("notch.stop.unavailable.codex")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
 
                 HStack(spacing: 14) {
                     elapsedLabel
@@ -119,6 +124,7 @@
             case .exactTargetUnavailable: "notch.stop.unavailable.target"
             case .permissionRequired: "notch.stop.unavailable.permission"
             case .unsupportedTerminal: "notch.stop.unavailable.terminal"
+            case .codexConnectionRequired: "notch.stop.unavailable.codex"
             }
         }
 

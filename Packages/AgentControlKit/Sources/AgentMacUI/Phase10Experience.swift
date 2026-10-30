@@ -201,6 +201,7 @@
 
         public func testIntegration(_ provider: HookProvider) async {
             await perform {
+                self.testEventSucceeded = false
                 let records = await self.integrationManager.scan()
                 self.integrations = records
                 guard records.first(where: { $0.provider == provider })?.state == .healthy else {
@@ -301,30 +302,32 @@
         }
 
         private static func emitProviderTestEvent(_ provider: HookProvider) async throws -> Bool {
-            let eventName = provider == .cursor ? "sessionStart" : "SessionStart"
             let token = "integration-self-test-\(provider.rawValue)-\(UUID().uuidString.lowercased())"
-            let mapping = try ProviderHookMapper().map(
-                provider: provider,
-                input: .object([
-                    "hook_event_name": .string(eventName),
-                    "session_id": .string(token),
-                    "conversation_id": .string(token),
-                    "cwd": .string("/private/tmp"),
-                    "workspace_roots": .array([.string("/private/tmp")])
-                ]),
-                environment: ["AGENTCONTROL_PROVIDER_VERSION": "1.0.0", "PWD": "/private/tmp"]
-            )
             let paths = try AgentControlPaths.userDefault()
             let client = AgentControlHookClient(configuration: HookConfiguration(
                 socketURL: paths.socketURL,
                 spoolDirectory: paths.spoolDirectory,
                 statusTimeoutMilliseconds: 1000
             ))
-            for submission in mapping.submissions {
-                guard case let .eventAccepted(disposition) = await client.emit(submission, notification: true),
-                      disposition != .spooled,
-                      disposition != .rejectedTransition
-                else { return false }
+            let eventNames = provider == .cursor ? ["sessionStart", "sessionEnd"] : ["SessionStart", "Stop"]
+            for eventName in eventNames {
+                let mapping = try ProviderHookMapper().map(
+                    provider: provider,
+                    input: .object([
+                        "hook_event_name": .string(eventName),
+                        "session_id": .string(token),
+                        "conversation_id": .string(token),
+                        "cwd": .string("/private/tmp"),
+                        "workspace_roots": .array([.string("/private/tmp")])
+                    ]),
+                    environment: ["AGENTCONTROL_PROVIDER_VERSION": "1.0.0", "PWD": "/private/tmp"]
+                )
+                for submission in mapping.submissions {
+                    guard case let .eventAccepted(disposition) = await client.emit(submission, notification: true),
+                          disposition != .spooled,
+                          disposition != .rejectedTransition
+                    else { return false }
+                }
             }
             return true
         }

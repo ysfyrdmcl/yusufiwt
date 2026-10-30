@@ -1,3 +1,5 @@
+// Scanner and polling lifecycle share the same bounded transcript contract.
+// swiftlint:disable file_length
 #if os(macOS)
     import AgentDomain
     import AgentProtocol
@@ -16,6 +18,8 @@
         let transcriptURL: URL
         let modifiedAt: Date
         let startedAt: Date
+        var observedState: SessionState?
+        var usageMetrics: [SessionUsageMetric] = []
 
         var sessionID: SessionID {
             SessionID(TranscriptStableIdentifier.uuid("session:\(provider.rawValue):\(externalSessionID)"))
@@ -80,7 +84,9 @@
                     projectURL: projectURL,
                     transcriptURL: file,
                     modifiedAt: dates.modified,
-                    startedAt: dates.created
+                    startedAt: dates.created,
+                    observedState: codexState(from: file),
+                    usageMetrics: codexUsage(from: file)
                 ))
             }
             return observations
@@ -164,6 +170,61 @@
             return (modified, values.creationDate ?? modified)
         }
 
+        private func codexState(from file: URL) -> SessionState? {
+            guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
+            defer { try? handle.close() }
+            guard let size = try? handle.seekToEnd() else { return nil }
+            let offset = size > 262_144 ? size - 262_144 : 0
+            try? handle.seek(toOffset: offset)
+            let data = (try? handle.read(upToCount: 262_144)) ?? Data()
+            var lines = data.split(separator: 10)
+            if offset > 0, !lines.isEmpty {
+                lines.removeFirst()
+            }
+            var hasTurnActivity = false
+            for line in lines.reversed() {
+                guard let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
+                      object["type"] as? String == "event_msg",
+                      let payload = object["payload"] as? [String: Any] else { continue }
+                switch payload["type"] as? String {
+                case "task_started": return .running
+                case "task_complete": return .completed
+                case "turn_aborted": return .cancelled
+                case "token_count", "agent_message", "agent_reasoning": hasTurnActivity = true
+                default: continue
+                }
+            }
+            // Long turns can push task_started outside the bounded tail.
+            return hasTurnActivity ? .running : nil
+        }
+
+        private func codexUsage(from file: URL) -> [SessionUsageMetric] {
+            guard let handle = try? FileHandle(forReadingFrom: file) else { return [] }
+            defer { try? handle.close() }
+            guard let size = try? handle.seekToEnd() else { return [] }
+            let offset = size > 262_144 ? size - 262_144 : 0
+            try? handle.seek(toOffset: offset)
+            let data = (try? handle.read(upToCount: 262_144)) ?? Data()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            for line in data.split(separator: 10).reversed() {
+                guard let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
+                      object["type"] as? String == "event_msg",
+                      let payload = object["payload"] as? [String: Any], payload["type"] as? String == "token_count",
+                      let timestamp = object["timestamp"] as? String,
+                      let date = formatter.date(from: timestamp),
+                      let info = payload["info"] as? [String: Any],
+                      let last = info["last_token_usage"] as? [String: Any],
+                      let used = last["total_tokens"] as? Int64,
+                      let total = info["model_context_window"] as? Int64, total > 0 else { continue }
+                return [SessionUsageMetric(
+                    provider: AdapterID("codex"), kind: .contextRemaining, total: total, used: used,
+                    source: "codex.transcript.token_count", updatedAt: date
+                )]
+            }
+            return []
+        }
+
         // Mirrors the three optional metadata fields emitted by Codex transcript headers.
         // swiftlint:disable:next large_tuple
         private func codexMetadata(from file: URL) -> (id: String?, cwd: String?, parentID: String?) {
@@ -210,6 +271,7 @@
         private let runningInterval: TimeInterval
         private var task: Task<Void, Never>?
         private var lastStates: [SessionID: SessionState] = [:]
+        private var lastModifiedDates: [SessionID: Date] = [:]
 
         init(
             runtime: HelperRuntime,
@@ -247,12 +309,22 @@
             let observations = scanner.scan(at: now)
             let visibleIDs = Set(observations.map(\.sessionID))
             lastStates = lastStates.filter { visibleIDs.contains($0.key) }
+            lastModifiedDates = lastModifiedDates.filter { visibleIDs.contains($0.key) }
             for observation in observations {
-                let state: SessionState = now.timeIntervalSince(observation.modifiedAt) < runningInterval
-                    ? .running
-                    : .completed
-                guard lastStates[observation.sessionID] != state else { continue }
-                let wasCompleted = lastStates[observation.sessionID] == .completed
+                if lastStates[observation.sessionID] == nil,
+                   case let .sessionSnapshot(persisted) = await runtime.handle(.sessionSnapshot(observation.sessionID)) {
+                    lastStates[observation.sessionID] = persisted?.state
+                }
+                let age = now.timeIntervalSince(observation.modifiedAt)
+                let state: SessionState = if let observed = observation.observedState {
+                    observed == .running && age > 5 * 60 ? .stale : observed
+                } else {
+                    // A file/header write alone does not establish an active Codex turn.
+                    observation.provider == .codex ? .stale : (age < runningInterval ? .running : .stale)
+                }
+                guard lastStates[observation.sessionID] != state
+                    || lastModifiedDates[observation.sessionID] != observation.modifiedAt else { continue }
+                let wasCompleted = lastStates[observation.sessionID]?.isTerminal == true
                 let submission = Self.submission(
                     for: observation,
                     state: state,
@@ -273,6 +345,7 @@
                     _ = await runtime.handle(.submitEvent(runningSubmission))
                 }
                 lastStates[observation.sessionID] = state
+                lastModifiedDates[observation.sessionID] = observation.modifiedAt
             }
         }
 
@@ -289,15 +362,22 @@
             let provider = observation.provider.rawValue
             let nodeID = NodeID(TranscriptStableIdentifier.uuid("node:\(ProcessInfo.processInfo.hostName)"))
             let projectPath = observation.projectURL.standardizedFileURL.path
-            let occurredAt = state == .completed
-                ? observation.modifiedAt.addingTimeInterval(runningInterval)
+            let occurredAt = state == .stale
+                ? min(receivedAt, observation.modifiedAt.addingTimeInterval(runningInterval))
                 : observation.modifiedAt
-            let sequence = Int64(occurredAt.timeIntervalSince1970 * 1_000_000) + sequenceOffset
-            let eventType = resumesTerminalSession ? "provider.resumed" : "session.stateChanged"
-            let payload: JSONValue = resumesTerminalSession
-                ? .object([:])
-                : .object(["state": .string(state.rawValue)])
-            let eventToken = "transcript:\(provider):\(observation.externalSessionID):\(eventType):\(sequence)"
+            let sequence = Int64(occurredAt.timeIntervalSince1970 * 1_000_000) + sequenceOffset + (observation.usageMetrics.isEmpty ? 0 : 2)
+            let eventType = resumesTerminalSession ? "provider.resumed"
+                : (observation.usageMetrics.isEmpty ? "session.stateChanged" : "session.usageUpdated")
+            let payload: JSONValue = if resumesTerminalSession {
+                .object([:])
+            } else if !observation.usageMetrics.isEmpty,
+                      let data = try? JSONEncoder().encode(SessionUsageUpdate(metrics: observation.usageMetrics, concurrentState: state)),
+                      let value = try? JSONDecoder().decode(JSONValue.self, from: data) {
+                value
+            } else {
+                .object(["state": .string(state.rawValue)])
+            }
+            let eventToken = "transcript-v2:\(provider):\(observation.externalSessionID):\(eventType):\(sequence)"
             let source = EventSource(
                 adapterID: AdapterID(provider),
                 adapterVersion: "transcript-v1",

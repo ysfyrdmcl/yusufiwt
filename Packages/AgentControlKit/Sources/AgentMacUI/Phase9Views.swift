@@ -1,3 +1,5 @@
+// Keep the existing operations views together, including privacy save feedback.
+// swiftlint:disable file_length
 #if os(macOS)
     import AgentDomain
     import AgentPersistence
@@ -9,6 +11,12 @@
         @Bindable var store: AgentControlStore
         @State private var searchText = ""
         @State private var stateFilter: HistoryStateFilter = .all
+
+        init(store: AgentControlStore) {
+            self.store = store
+            _searchText = State(initialValue: store.historyQuery.searchText)
+            _stateFilter = State(initialValue: HistoryStateFilter.allCases.first { $0.states == store.historyQuery.states } ?? .all)
+        }
 
         var body: some View {
             VStack(spacing: 0) {
@@ -83,7 +91,7 @@
         }
 
         var titleKey: LocalizedStringKey {
-            LocalizedStringKey("history.filter.\(rawValue)")
+            LocalizedStringKey("history.filter." + rawValue)
         }
     }
 
@@ -363,6 +371,9 @@
                     Button("action.save") { Task { await store.savePrivacy(settings) } }
                     Button("privacy.deleteHistory", role: .destructive) { showingDeleteConfirmation = true }
                 }
+                if let error = store.operationsError {
+                    OperationsErrorView(message: error)
+                }
                 if let deletionMessage {
                     Text(deletionMessage).font(.caption)
                 }
@@ -370,7 +381,11 @@
             .padding(AgentControlSpacing.page)
             .navigationTitle("privacy.title")
             .task { settings = store.privacy }
-            .onChange(of: store.privacy) { _, value in settings = value }
+            .onChange(of: store.privacy) { oldValue, value in
+                if settings == oldValue {
+                    settings = value
+                }
+            }
             .alert("privacy.deleteConfirm", isPresented: $showingDeleteConfirmation) {
                 Button("action.delete", role: .destructive) {
                     Task {

@@ -7,6 +7,28 @@
 
     @Suite("Phase 10 navigation and onboarding")
     struct Phase10NavigationTests {
+        @Test("IDE stop waits for a matching terminal acknowledgment", arguments: [true, false])
+        @MainActor
+        func stopAcknowledgment(sent: Bool) async throws {
+            var dispatchedURL: URL?
+            let stopper = TerminalStopCoordinator(openExtensionURL: { dispatchedURL = $0; return true })
+            let terminal = TerminalContext(
+                applicationBundleID: "com.microsoft.VSCode", correlationToken: "verified-token", capturedAt: Date()
+            )
+            let task = Task { await stopper.stop(context: terminal) }
+            for _ in 0 ..< 100 where dispatchedURL == nil {
+                await Task.yield()
+            }
+            let url = try #require(dispatchedURL)
+            var callback = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+            callback.scheme = "agentcontrol"
+            callback.host = "stop-result"
+            callback.path = ""
+            callback.queryItems?.append(URLQueryItem(name: "sent", value: String(sent)))
+            try stopper.handleCallback(#require(callback.url))
+            #expect(await task.value == (sent ? .signalSent : .unavailable(.exactTargetUnavailable)))
+        }
+
         @Test("Supported exact-pane adapters choose official APIs before accessibility")
         func exactPanePlans() throws {
             let planner = TerminalNavigationPlanner()

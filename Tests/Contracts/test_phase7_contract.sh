@@ -23,7 +23,7 @@ if grep -Eq '^[[:space:]]*(Window|WindowGroup)\(' Apps/macOS/AgentControlMacApp.
   echo 'Mac Local must remain notch-first without an automatic main window scene' >&2
   exit 1
 fi
-grep -q 'Settings {' Apps/macOS/AgentControlMacApp.swift
+grep -q 'MacSettingsWindowController' Apps/macOS/AgentControlMacApp.swift
 grep -q 'ControlCenterWindowController' Apps/macOS/AgentControlMacApp.swift
 grep -q 'NSPanel' Packages/AgentControlKit/Sources/AgentMacUI/FloatingPanel.swift
 grep -q 'addGlobalMonitorForEvents' Packages/AgentControlKit/Sources/AgentMacUI/GlobalHotKey.swift

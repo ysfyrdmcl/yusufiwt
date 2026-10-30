@@ -34,7 +34,7 @@
     public enum LocalIPCContract {
         // Additive DTO fields advance the minor while the ACIP frame and legacy
         // negotiation continue to use the byte-compatible major version.
-        public static let current = LocalIPCVersion(major: 1, minor: 1)
+        public static let current = LocalIPCVersion(major: 1, minor: 2)
         public static let currentMajorVersion = current.major
         public static let currentMinorVersion = current.minor
         public static let supportedVersions = [current]
@@ -122,6 +122,7 @@
         case resolveDecision(HookDecisionResolution)
         case listSessions(limit: Int)
         case sessionSnapshot(SessionID)
+        case interruptCodexSession(SessionID)
         case sessionEvents(sessionID: SessionID, limit: Int)
         case history(HistoryQuery)
         case analytics(AnalyticsQuery)
@@ -149,6 +150,7 @@
         case decisionResolution(DecisionResolutionDisposition)
         case sessionList([SessionListItem])
         case sessionSnapshot(AgentSession?)
+        case codexInterruptRequested(Bool)
         case sessionEvents([PersistedSessionEvent])
         case history(HistoryPage)
         case analytics(AnalyticsSummary)

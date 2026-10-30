@@ -14,7 +14,16 @@ non-increasing sequences for the same source key are idempotent no-ops.
 Approval events cannot produce `applied` or `deniedApplied` before a correlated
 provider acknowledgment advances the approval lifecycle.
 
-## Local IPC version 1.1
+## Local IPC version 1.2
+
+Minor 1.2 adds `interruptCodexSession(SessionID)` and
+`codexInterruptRequested(Bool)`. The helper verifies the stored provider and
+external thread identity, then requests interruption through the desktop's
+stdio relay. Its private same-user IPC endpoint uses the native thread UUID
+in the identifier field and accepts only negotiation and interruption.
+A positive result means the stop request was acknowledged; only a
+subsequent provider lifecycle event confirms completion. Older helpers do not
+receive this request.
 
 App-to-helper requests use authenticated XPC and negotiate the highest mutually
 supported major/minor pair. A 1.1 client sends its supported `LocalIPCVersion`

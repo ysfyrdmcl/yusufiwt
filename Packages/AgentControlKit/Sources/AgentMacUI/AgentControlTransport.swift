@@ -26,6 +26,7 @@
     public protocol AgentControlTransport: Sendable {
         func snapshot(sessionLimit: Int) async throws -> AgentControlSnapshot
         func session(id: SessionID) async throws -> AgentSession?
+        func interruptCodexSession(id: SessionID) async throws -> Bool
         func events(sessionID: SessionID, limit: Int) async throws -> [PersistedSessionEvent]
         func history(_ query: HistoryQuery) async throws -> HistoryPage
         func analytics(_ query: AnalyticsQuery) async throws -> AnalyticsSummary
@@ -44,6 +45,10 @@
     }
 
     public extension AgentControlTransport {
+        func interruptCodexSession(id _: SessionID) async throws -> Bool {
+            throw LocalIPCError.unavailable
+        }
+
         func history(_: HistoryQuery) async throws -> HistoryPage {
             throw LocalIPCError.unavailable
         }
@@ -126,6 +131,14 @@
             let response = try await send(.sessionSnapshot(id))
             guard case let .sessionSnapshot(session) = response else { throw LocalIPCError.malformedPayload }
             return session
+        }
+
+        public func interruptCodexSession(id: SessionID) async throws -> Bool {
+            try await negotiateIfNeeded()
+            guard let negotiatedVersion, negotiatedVersion.minor >= 2 else { throw LocalIPCError.unavailable }
+            let response = try await send(.interruptCodexSession(id))
+            guard case let .codexInterruptRequested(requested) = response else { throw LocalIPCError.malformedPayload }
+            return requested
         }
 
         public func events(sessionID: SessionID, limit: Int) async throws -> [PersistedSessionEvent] {

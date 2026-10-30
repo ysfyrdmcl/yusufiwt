@@ -126,7 +126,7 @@ struct LaunchAgentAndXPCContractTests {
             return
         }
         #expect(items.first?.usageMetrics == [metric])
-        #expect(LocalIPCContract.current == LocalIPCVersion(major: 1, minor: 1))
+        #expect(LocalIPCContract.current == LocalIPCVersion(major: 1, minor: 2))
 
         var legacyObject = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(item)) as? [String: Any])
         legacyObject.removeValue(forKey: "usageMetrics")

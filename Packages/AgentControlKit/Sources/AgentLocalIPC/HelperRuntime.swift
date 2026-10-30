@@ -64,6 +64,7 @@
                     }
                     return .negotiated(version: LocalIPCContract.currentVersion)
                 case .health:
+                    try await registry.expireInactiveSessions(at: now())
                     return try await .health(health())
                 case .heartbeat:
                     heartbeatSequence &+= 1
@@ -73,7 +74,7 @@
                     await observeDecisionStatus(in: submission)
                     return .eventAccepted(disposition)
                 case .requestDecision, .pendingDecisions, .decisionLifecycles, .resolveDecision,
-                     .listSessions, .sessionSnapshot,
+                     .listSessions, .sessionSnapshot, .interruptCodexSession,
                      .sessionEvents, .history, .analytics, .listRules, .upsertRule, .deleteRule,
                      .activeAlerts, .privacySettings, .savePrivacySettings, .diagnostics, .repair,
                      .deleteCompletedHistory:
@@ -142,6 +143,8 @@
                 return try await .sessionList(database.sessions(limit: limit))
             case let .sessionSnapshot(id):
                 return try await .sessionSnapshot(database.session(id: id))
+            case let .interruptCodexSession(id):
+                return try await interruptCodexSession(id)
             case let .sessionEvents(sessionID, limit):
                 return try await .sessionEvents(database.events(sessionID: sessionID, limit: limit))
             case let .history(query):
@@ -289,6 +292,34 @@
             let data = try JSONEncoder().encode(handoff)
             try data.write(to: paths.handoffURL, options: .atomic)
             return handoff
+        }
+
+        private func interruptCodexSession(_ id: SessionID) async throws -> HelperResponse {
+            await recordStop(id, outcome: "requested")
+            guard let session = try await database.session(id: id), session.adapterID.rawValue == "codex",
+                  !session.state.isTerminal, let threadID = session.externalSessionID else {
+                await recordStop(id, outcome: "inactiveOrInvalidTarget")
+                return .codexInterruptRequested(false)
+            }
+            guard CodexDesktopControl().isAvailable else {
+                await recordStop(id, outcome: "connectionUnavailable")
+                return .codexInterruptRequested(false)
+            }
+            do {
+                let requested = try await CodexDesktopControl().interrupt(threadID: threadID)
+                await recordStop(id, outcome: requested ? "acknowledged" : "noActiveTurn")
+                return .codexInterruptRequested(requested)
+            } catch {
+                await recordStop(id, outcome: "failed")
+                throw error
+            }
+        }
+
+        private func recordStop(_ id: SessionID, outcome: String) async {
+            try? await database.appendAudit(AuditEntry(
+                id: UUID(), category: "sessionControl", action: "stop.\(outcome)",
+                targetID: id.description, metadata: Data("{}".utf8), createdAt: now()
+            ))
         }
 
         public func gracefulShutdown() async {

@@ -1,6 +1,7 @@
 import AgentLocalIPC
 import AgentMacUI
 import AppKit
+import ServiceManagement
 import SwiftUI
 #if canImport(Sparkle)
     import Sparkle
@@ -17,6 +18,7 @@ struct AgentControlMacApp: App {
                 settings: appDelegate.settingsState,
                 togglePanel: appDelegate.togglePanel,
                 openControlCenter: { appDelegate.openControlCenter() },
+                openSettings: appDelegate.openSettings,
                 updateNotifications: appDelegate.updateNotifications
             )
             .environment(\.locale, appDelegate.settingsState.application.language.locale)
@@ -26,6 +28,10 @@ struct AgentControlMacApp: App {
         }
         .menuBarExtraStyle(.window)
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("menu.settings", action: appDelegate.openSettings)
+                    .keyboardShortcut(",", modifiers: .command)
+            }
             CommandGroup(after: .appInfo) {
                 Button("menu.checkForUpdates") { appDelegate.checkForUpdates() }
                     .disabled(!appDelegate.canCheckForUpdates)
@@ -40,16 +46,6 @@ struct AgentControlMacApp: App {
                     Button("Resume Live Agent Data") { appDelegate.resumeLiveData() }
                 }
             #endif
-        }
-
-        Settings {
-            MacLocalSettingsView(
-                state: appDelegate.settingsState,
-                onHotKeyChange: appDelegate.updateHotKey,
-                onNotificationChange: appDelegate.updateNotifications,
-                onApplicationChange: appDelegate.updateApplicationPreferences,
-                openControlCenter: appDelegate.openControlCenter
-            )
         }
     }
 }
@@ -72,8 +68,10 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
     lazy var phase10 = Phase10Coordinator(notificationCoordinator: notificationCoordinator)
     private var panelCoordinator: FloatingPanelCoordinator?
     private var controlCenterWindowController: ControlCenterWindowController?
+    private var settingsWindowController: MacSettingsWindowController?
     private var hotKeyController: GlobalHotKeyController?
     private var launchAgentManager: LaunchAgentManager?
+    private let codexStartup = CodexDesktopStartup()
     private var hasPendingNotificationReview = false
 
     func applicationDidFinishLaunching(_: Notification) {
@@ -86,6 +84,7 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
             notificationPreferences: settingsState.notifications,
             applicationPreferences: settingsState.application,
             openControlCenter: { [weak self] in self?.openControlCenter() },
+            openSettings: { [weak self] in self?.openSettings() },
             notificationPreferencesChanged: { [weak self] value in self?.updateNotifications(value) }
         )
         panelCoordinator = coordinator
@@ -97,34 +96,44 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
         notificationCoordinator.setUsesNotchSurface(true)
         hotKeyController = GlobalHotKeyController(setting: hotKeyPreferences.load()) { [weak coordinator] in coordinator?.toggle() }
         hotKeyController?.start()
+        startServices()
+        if phase10.isOnboardingPresented {
+            Task { @MainActor [weak self] in
+                await Task.yield()
+                self?.openControlCenter(.integrations)
+            }
+        }
+    }
+
+    private func startServices() {
         Task { [weak self] in
             guard let self else { return }
             do {
                 let paths = try AgentControlPaths.userDefault()
                 let manager = LaunchAgentManager(paths: paths)
                 launchAgentManager = manager
-                if phase10.isCompleted {
+                do {
                     try await Task.sleep(for: .seconds(2))
                     let response = UnixSocketClient(socketURL: paths.socketURL)
                         .sendOrNeutral(.health, timeoutMilliseconds: 1000)
                     if case .neutral(reason: .helperUnavailable) = response {
                         let state = await manager.status()
-                        _ = state == .enabled
+                        let registered = state == .enabled
                             ? try await manager.repairRegistration()
                             : try await manager.register()
+                        if registered == .requiresApproval {
+                            SMAppService.openSystemSettingsLoginItems()
+                        }
                     }
                 }
             } catch {
-                // The store exposes the helper as offline and keeps retrying;
-                // registration approval can be completed in System Settings.
+                let alert = NSAlert()
+                alert.messageText = String(localized: "startup.helper.failed")
+                alert.informativeText = String(localized: "startup.helper.permission")
+                alert.runModal()
             }
             store.start()
-        }
-        if phase10.isOnboardingPresented {
-            Task { @MainActor [weak self] in
-                await Task.yield()
-                self?.openControlCenter(.integrations)
-            }
+            codexStartup.start(store: store)
         }
     }
 
@@ -144,6 +153,7 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_: Notification) {
+        codexStartup.stop()
         hotKeyController?.stop()
         panelCoordinator?.stop()
         store.stop()
@@ -186,6 +196,19 @@ final class AgentControlAppDelegate: NSObject, NSApplicationDelegate {
         for url in urls {
             store.handleNavigationCallback(url)
         }
+    }
+
+    func openSettings() {
+        let controller = settingsWindowController ?? MacSettingsWindowController(rootView: MacLocalSettingsView(
+            state: settingsState,
+            onHotKeyChange: { [weak self] in self?.updateHotKey($0) },
+            onNotificationChange: { [weak self] in self?.updateNotifications($0) },
+            onApplicationChange: { [weak self] in self?.updateApplicationPreferences($0) },
+            openControlCenter: { [weak self] in self?.openControlCenter($0) }
+        ))
+        settingsWindowController = controller
+        panelCoordinator?.setExpanded(false)
+        controller.show(locale: settingsState.application.language.locale)
     }
 
     #if DEBUG
@@ -259,6 +282,7 @@ private struct MenuBarContent: View {
     @Bindable var settings: MacSettingsState
     let togglePanel: () -> Void
     let openControlCenter: () -> Void
+    let openSettings: () -> Void
     let updateNotifications: (MacNotificationPreferences) -> Void
 
     var body: some View {
@@ -309,7 +333,7 @@ private struct MenuBarContent: View {
             Button("menu.openControlCenter", action: openControlCenter)
                 .keyboardShortcut("o")
                 .accessibilityIdentifier("menu.openControlCenter")
-            SettingsLink {
+            Button(action: openSettings) {
                 Label("menu.settings", systemImage: "gearshape")
             }
             .accessibilityIdentifier("menu.openSettings")

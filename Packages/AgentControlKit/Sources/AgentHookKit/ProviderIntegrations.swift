@@ -200,6 +200,12 @@
             candidates += ["/opt/homebrew/bin", "/usr/local/bin"].map {
                 URL(fileURLWithPath: $0).appendingPathComponent(executable)
             }
+            candidates.append(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/\(executable)"))
+            if provider == .codex {
+                candidates += ["ChatGPT", "Codex"].map {
+                    URL(fileURLWithPath: "/Applications/\($0).app/Contents/Resources/codex")
+                }
+            }
             if provider == .cursor {
                 candidates.append(URL(fileURLWithPath: "/Applications/Cursor.app/Contents/Resources/app/bin/cursor"))
             }

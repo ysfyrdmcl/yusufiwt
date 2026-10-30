@@ -6,6 +6,26 @@ import Testing
 
 @Suite("Helper registry and runtime", .serialized)
 struct RegistryAndRuntimeTests {
+    @Test("Later hook events refresh a discovered session's terminal target")
+    func terminalContextRefresh() async throws {
+        let stack = try await makeTestRuntime(paths: temporaryPaths())
+        let fixture = try LocalIPCFixture()
+        _ = try await stack.registry.ingest(fixture.submission())
+        for sequence: Int64 in [2, 3] {
+            let submission = fixture.submission(sequence: sequence)
+            var session = submission.initialSession
+            session.terminalContext = TerminalContext(
+                applicationBundleID: "com.github.wez.wezterm", paneIdentifier: String(sequence),
+                correlationToken: "terminal", capturedAt: fixture.date.addingTimeInterval(Double(sequence))
+            )
+            _ = try await stack.registry.ingest(HelperEventSubmission(envelope: submission.envelope, initialSession: session))
+        }
+        _ = try await stack.registry.ingest(fixture.submission(sequence: 4))
+        #expect(await stack.registry.session(id: fixture.sessionID)?.terminalContext?.paneIdentifier == "3")
+        #expect(try await stack.database.session(id: fixture.sessionID)?.terminalContext?.paneIdentifier == "3")
+        await stack.runtime.gracefulShutdown()
+    }
+
     @Test("Event persists without an app client and duplicate is not reapplied")
     func persistenceWithoutApp() async throws {
         let paths = try temporaryPaths()
@@ -33,6 +53,24 @@ struct RegistryAndRuntimeTests {
         #expect(try await secondRegistry.restoreActiveSnapshots() == 1)
         #expect(await secondRegistry.session(id: fixture.sessionID)?.state == .running)
         await secondDatabase.close()
+    }
+
+    @Test("Completed sessions keep their persisted revision after helper restart")
+    func completedSnapshotAfterRestart() async throws {
+        let paths = try temporaryPaths()
+        let fixture = try LocalIPCFixture()
+        let first = try await makeTestRuntime(paths: paths)
+        _ = try await first.registry.ingest(fixture.submission())
+        _ = try await first.registry.ingest(fixture.submission(sequence: 2, state: .completed))
+        let revision = try #require(await first.registry.session(id: fixture.sessionID)?.snapshotRevision)
+        await first.runtime.gracefulShutdown()
+        let second = try await makeTestRuntime(paths: paths)
+        _ = try await second.registry.ingest(fixture.submission(sequence: 3, state: .completed))
+        let persisted = try #require(await second.database.session(id: fixture.sessionID))
+        #expect(persisted.snapshotRevision > revision)
+        #expect(await second.registry.session(id: fixture.sessionID)?.snapshotRevision == persisted.snapshotRevision)
+        #expect(await second.registry.session(id: fixture.sessionID)?.state == .completed)
+        await second.runtime.gracefulShutdown()
     }
 
     @Test("Restart restores usage ordering and rejects an older provider sequence")

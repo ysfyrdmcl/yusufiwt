@@ -24,6 +24,7 @@ test -f "$product/Contents/Resources/release-manifest.json"
 rm -rf "$output"
 ditto "$product" "$output"
 rm -f "$output/Contents/Resources/AgentControlHelper" "$output/Contents/Resources/agentcontrol-hook"
+ditto "$repo_root/Scripts/codex_desktop_relay.sh" "$output/Contents/Resources/codex-desktop-relay"
 
 case "$signing_mode" in
   adhoc)

@@ -1,4 +1,5 @@
 import AgentMacUI
+import AppKit
 import Observation
 import SwiftUI
 
@@ -20,6 +21,32 @@ final class MacSettingsState {
     }
 }
 
+@MainActor
+final class MacSettingsWindowController: NSWindowController {
+    init(rootView: MacLocalSettingsView) {
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 632, height: 502),
+            styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false
+        )
+        window.contentView = NSHostingView(rootView: rootView)
+        window.isReleasedWhenClosed = false
+        window.setFrameAutosaveName("AgentControlSettings")
+        super.init(window: window)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        nil
+    }
+
+    func show(locale: Locale) {
+        window?.title = String(localized: "menu.settings", locale: locale)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        showWindow(nil)
+        window?.makeKeyAndOrderFront(nil)
+    }
+}
+
 struct MacLocalSettingsView: View {
     @Bindable var state: MacSettingsState
     let onHotKeyChange: (GlobalHotKeySetting) -> Void
@@ -27,18 +54,26 @@ struct MacLocalSettingsView: View {
     let onApplicationChange: (MacLocalPreferences) -> Void
     let openControlCenter: (DashboardSection) -> Void
 
+    @State private var selectedTab = "general"
+
     var body: some View {
-        TabView {
-            generalSettings
-                .tabItem { Label("settings.general", systemImage: "gear") }
-            languageSettings
-                .tabItem { Label("settings.language", systemImage: "character.bubble") }
-            notificationSettings
-                .tabItem { Label("settings.notifications", systemImage: "bell") }
-            appearanceSettings
-                .tabItem { Label("settings.panel", systemImage: "macwindow") }
-            advancedSettings
-                .tabItem { Label("settings.advanced", systemImage: "wrench.and.screwdriver") }
+        VStack(spacing: 12) {
+            Picker("menu.settings", selection: $selectedTab) {
+                Text("settings.general").tag("general")
+                Text("settings.language").tag("language")
+                Text("settings.notifications").tag("notifications")
+                Text("settings.panel").tag("panel")
+                Text("settings.advanced").tag("advanced")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            switch selectedTab {
+            case "language": languageSettings
+            case "notifications": notificationSettings
+            case "panel": appearanceSettings
+            case "advanced": advancedSettings
+            default: generalSettings
+            }
         }
         .environment(\.locale, state.application.language.locale)
         .padding(16)

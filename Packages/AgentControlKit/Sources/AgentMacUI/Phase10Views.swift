@@ -42,10 +42,15 @@
                         Phase10MessageLabel(message: message, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
                     }
+                    if coordinator.testEventSucceeded {
+                        Label("onboarding.verify.success", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
                 }
                 .padding(AgentControlSpacing.page)
             }
             .task { await coordinator.refreshIntegrations() }
+            .navigationTitle("integrations.title")
             .sheet(isPresented: Binding(
                 get: { previewProvider != nil },
                 set: {
@@ -85,7 +90,7 @@
                     Label(record.provider.rawValue.capitalized, systemImage: "cpu")
                         .font(.headline)
                     Spacer()
-                    Text("integration.state.\(record.state.rawValue)")
+                    Text(LocalizedStringKey("integration.state." + record.state.rawValue))
                         .font(.caption.bold())
                 }
                 LabeledContent(

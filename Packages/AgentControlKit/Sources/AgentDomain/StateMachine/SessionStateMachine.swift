@@ -50,8 +50,8 @@ public enum SessionStateMachine {
         .completed: [],
         .failed: [],
         .cancelled: [],
-        .disconnected: [.starting, .thinking, .running, .executing, .waitingApproval, .waitingInput, .failed, .cancelled, .stale],
-        .stale: [.starting, .thinking, .running, .executing, .waitingApproval, .waitingInput, .failed, .cancelled, .disconnected]
+        .disconnected: [.starting, .thinking, .running, .executing, .waitingApproval, .waitingInput, .completed, .failed, .cancelled, .stale],
+        .stale: [.starting, .thinking, .running, .executing, .waitingApproval, .waitingInput, .completed, .failed, .cancelled, .disconnected]
     ]
 
     public static func canTransition(from: SessionState, to target: SessionState, explicitResume: Bool = false) -> Bool {

@@ -82,12 +82,14 @@ async function handleTerminalUri(uri) {
         registration.terminal.show(false);
         if (uri.path === "/interrupt") {
             registration.terminal.sendText("\u0003", false);
+            await reportStopResult(uri, token, true);
             return;
         }
         await reportResult(token, "exactPane");
         return;
     }
     if (uri.path === "/interrupt") {
+        await reportStopResult(uri, token, false);
         vscode.window.showWarningMessage("yusufiwt could not safely find the registered terminal to stop.");
         return;
     }
@@ -100,6 +102,16 @@ async function handleTerminalUri(uri) {
         await reportResult(token, "unsupported");
     }
     vscode.window.showWarningMessage("yusufiwt could not find the exact terminal; the workspace was opened instead.");
+}
+async function reportStopResult(uri, token, sent) {
+    const request = new URLSearchParams(uri.query).get("request");
+    if (!token || !request)
+        return;
+    await vscode.env.openExternal(vscode.Uri.from({
+        scheme: "agentcontrol",
+        authority: "stop-result",
+        query: new URLSearchParams({ token, request, sent: String(sent) }).toString()
+    }));
 }
 async function reportResult(token, level) {
     if (!token)

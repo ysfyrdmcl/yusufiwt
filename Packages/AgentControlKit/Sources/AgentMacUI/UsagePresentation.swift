@@ -14,82 +14,36 @@
         public let resetsAt: Date?
 
         public init(
-            session: SessionListItem?,
-            at referenceDate: Date,
+            session: SessionListItem?, at referenceDate: Date,
             staleAfter: TimeInterval = SessionUsageMetric.defaultStaleAfter
         ) {
-            guard let session,
-                  let metric = Self.preferredMetric(
-                      session.usageMetrics,
-                      at: referenceDate,
-                      staleAfter: staleAfter
-                  ),
-                  let value = Self.value(metric)
-            else {
-                kind = nil
-                titleKey = "usage.weeklyLimit"
-                value = String(localized: "usage.weeklyUnavailable", defaultValue: "data unavailable")
-                sourceLabel = session.map { Self.sourceLabel($0) }
-                helpKey = "usage.providerUnavailable"
-                isAvailable = false
-                isStale = false
-                resetsAt = nil
-                return
-            }
+            let metric = session?.usageMetrics.filter { $0.kind == .contextRemaining }
+                .max { $0.updatedAt < $1.updatedAt }
+            self.init(metric: metric, titleKey: "usage.contextUsed", source: nil,
+                      at: referenceDate, staleAfter: staleAfter)
+        }
 
-            kind = metric.kind
-            titleKey = switch metric.kind {
-            case .quotaRemaining: "usage.weeklyLimit"
-            case .contextRemaining: "usage.contextRemaining"
-            case .tokenCounts: "usage.tokenCounts"
+        public init(
+            accountMetric: SessionUsageMetric?, at referenceDate: Date,
+            staleAfter: TimeInterval = SessionUsageMetric.defaultStaleAfter
+        ) {
+            let metric = accountMetric.flatMap {
+                $0.provider == AdapterID("codex") && $0.kind == .quotaRemaining && $0.quotaWindow == .weekly ? $0 : nil
             }
-            self.value = value
-            sourceLabel = Self.sourceLabel(session)
-            isAvailable = true
-            isStale = metric.isStale(at: referenceDate, staleAfter: staleAfter)
+            self.init(metric: metric, titleKey: "usage.weeklyUsed", source: "Codex",
+                      at: referenceDate, staleAfter: staleAfter)
+        }
+
+        private init(metric: SessionUsageMetric?, titleKey: String, source: String?, at date: Date, staleAfter: TimeInterval) {
+            kind = metric?.kind
+            self.titleKey = titleKey
+            value = metric?.remainingPercent.map { "\(100 - $0)%" }
+                ?? String(localized: "usage.weeklyUnavailable", defaultValue: "data unavailable")
+            sourceLabel = source
+            isAvailable = metric?.remainingPercent != nil
+            isStale = metric?.isStale(at: date, staleAfter: staleAfter) ?? false
             helpKey = isStale ? "usage.stale" : titleKey
-            resetsAt = metric.resetsAt
-        }
-
-        private static func preferredMetric(
-            _ metrics: [SessionUsageMetric],
-            at referenceDate: Date,
-            staleAfter: TimeInterval
-        ) -> SessionUsageMetric? {
-            let usable = metrics.filter {
-                $0.kind == .quotaRemaining && $0.quotaWindow == .weekly && value($0) != nil
-            }
-            let fresh = usable.filter { !$0.isStale(at: referenceDate, staleAfter: staleAfter) }
-            return preferred(in: fresh) ?? preferred(in: usable)
-        }
-
-        private static func preferred(in metrics: [SessionUsageMetric]) -> SessionUsageMetric? {
-            metrics.max(by: { $0.updatedAt < $1.updatedAt })
-        }
-
-        private static func value(_ metric: SessionUsageMetric) -> String? {
-            switch metric.kind {
-            case .quotaRemaining, .contextRemaining:
-                return metric.remainingPercent.map { "\($0)%" }
-            case .tokenCounts:
-                if let input = metric.inputTokens, let output = metric.outputTokens {
-                    return "\(input)↓ · \(output)↑"
-                }
-                if let total = metric.total {
-                    return "\(total)"
-                }
-                if let input = metric.inputTokens {
-                    return "\(input)↓"
-                }
-                if let output = metric.outputTokens {
-                    return "\(output)↑"
-                }
-                return nil
-            }
-        }
-
-        private static func sourceLabel(_ session: SessionListItem) -> String {
-            "\(session.adapterID.rawValue.capitalized) · \(session.projectName)"
+            resetsAt = metric?.resetsAt
         }
     }
 #endif

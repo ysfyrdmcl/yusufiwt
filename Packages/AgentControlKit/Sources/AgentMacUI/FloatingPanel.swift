@@ -25,6 +25,8 @@
         @ObservationIgnored
         private let openControlCenterHandler: @MainActor () -> Void
         @ObservationIgnored
+        private let openSettingsHandler: @MainActor () -> Void
+        @ObservationIgnored
         private let notificationPreferencesHandler: @MainActor (MacNotificationPreferences) -> Void
         @ObservationIgnored
         private var panel: AgentControlPanel?
@@ -54,6 +56,7 @@
             notificationPreferences: MacNotificationPreferences = .init(),
             applicationPreferences: MacLocalPreferences = .init(),
             openControlCenter: @escaping @MainActor () -> Void = {},
+            openSettings: @escaping @MainActor () -> Void = {},
             notificationPreferencesChanged: @escaping @MainActor (MacNotificationPreferences) -> Void = { _ in }
         ) {
             self.store = store
@@ -61,6 +64,7 @@
             self.applicationPreferences = applicationPreferences
             isNotificationSoundEnabled = notificationPreferences.soundEnabled
             openControlCenterHandler = openControlCenter
+            openSettingsHandler = openSettings
             notificationPreferencesHandler = notificationPreferencesChanged
             let center = NotificationCenter.default
             observers.append(center.addObserver(
@@ -143,6 +147,10 @@
             openControlCenterHandler()
         }
 
+        public func openSettings() {
+            openSettingsHandler()
+        }
+
         public func toggleNotificationSound() {
             notificationPreferences.soundEnabled.toggle()
             isNotificationSoundEnabled = notificationPreferences.soundEnabled
@@ -159,6 +167,12 @@
 
         public func updateApplicationPreferences(_ value: MacLocalPreferences) {
             applicationPreferences = value
+            if !value.autoHideActivity {
+                collapseTask?.cancel()
+                collapseTask = nil
+            } else if mode == .activity {
+                scheduleCompact(after: .seconds(5))
+            }
             if !value.showPanelForAttention, mode == .decision {
                 setMode(.compact, animated: true)
             }
@@ -339,6 +353,7 @@
             let alertIDs = Set(store.activeAlerts.map(\.id))
             let newAlertID = alertIDs.subtracting(knownAlertIDs).first
             knownAlertIDs = alertIDs
+            guard mode != .expanded else { return }
             if let newAlertID, shouldPresentLongRunningAlerts {
                 highlightedAlertID = newAlertID
                 highlightedSessionID = nil

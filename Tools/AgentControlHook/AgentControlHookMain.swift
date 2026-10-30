@@ -10,6 +10,38 @@ enum AgentControlHookMain {
         do {
             let arguments = Array(CommandLine.arguments.dropFirst())
             guard let command = arguments.first else { throw CLIError.usage }
+            if command == "codex-desktop-status" {
+                exit(CodexDesktopControl().isAvailable ? 0 : 1)
+            }
+            if command == "codex-desktop-proxy" {
+                let installed = ["/Applications/ChatGPT.app/Contents/Resources/codex", "/Applications/Codex.app/Contents/Resources/codex"]
+                // Desktop utility subprocesses can sanitize the launch environment.
+                let executable = ProcessInfo.processInfo.environment["YUSUFIWT_CODEX_EXECUTABLE"]
+                    ?? installed.first(where: { FileManager.default.isExecutableFile(atPath: $0) })
+                guard let executable, installed.contains(executable) else { throw CLIError.usage }
+                let forwarded = Array(arguments.dropFirst())
+                // Only the desktop owner needs the control socket. Utility app-servers
+                // (including Computer Use) must still launch while that owner is live.
+                if let index = forwarded.firstIndex(of: "app-server"),
+                   index + 1 == forwarded.count || forwarded[index + 1].hasPrefix("-"),
+                   !CodexDesktopControl().isAvailable {
+                    let bridge = CodexDesktopDecisionBridge(client: AgentControlHookClient(configuration: try .environment()))
+                    let relay = CodexDesktopRelay(decisionHandler: { data, respond in
+                        await bridge.handle(data, respond: respond)
+                    })
+                    try exit(relay.run(executableURL: URL(fileURLWithPath: executable), arguments: forwarded,
+                                       socketURL: CodexDesktopControl().socketURL, handleTerminationSignals: true))
+                }
+                let child = Process()
+                child.executableURL = URL(fileURLWithPath: executable)
+                child.arguments = forwarded
+                child.standardInput = FileHandle.standardInput
+                child.standardOutput = FileHandle.standardOutput
+                child.standardError = FileHandle.standardError
+                try child.run()
+                child.waitUntilExit()
+                exit(child.terminationStatus)
+            }
             if command == "version" {
                 writeStandardOutput(Data("agentcontrol-hook 0.4.0\n".utf8))
                 return
@@ -106,7 +138,7 @@ enum AgentControlHookMain {
         await withTaskGroup(of: (Int, HelperResponse).self) { group in
             for (index, request) in requests.enumerated() {
                 group.addTask {
-                    (index, await client.requestDecision(request))
+                    await (index, client.requestDecision(request))
                 }
             }
             var responses = Array(repeating: HelperResponse.neutral(reason: .timeout), count: requests.count)

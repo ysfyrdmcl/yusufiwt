@@ -59,7 +59,8 @@
             provider: HookProvider,
             input: JSONValue,
             environment: [String: String] = ProcessInfo.processInfo.environment,
-            now: Date = Date()
+            now: Date = Date(),
+            capabilities explicitCapabilities: CapabilityMatrix? = nil
         ) throws -> ProviderHookMapping {
             guard case let .object(fields) = input else { throw ProviderHookMappingError.malformedInput }
             let eventName = fields["hook_event_name"]?.stringValue
@@ -87,7 +88,7 @@
                 ?? fields["provider_version"]?.stringValue
                 ?? fields["cursor_version"]?.stringValue
             let version = versionText.flatMap(ProviderVersion.init)
-            let capabilities = compatibility.capabilities(for: provider, version: version)
+            let capabilities = explicitCapabilities ?? compatibility.capabilities(for: provider, version: version)
             let adapterVersion = version?.description ?? "unknown"
             let occurredAt = parseDate(fields["timestamp"]?.stringValue) ?? now
             let sequence = structuredSequence(fields)
@@ -344,7 +345,7 @@
             }
         }
 
-        private func answerValues(_ decision: HookDecision, request: HookDecisionRequest) -> [String]? {
+        func answerValues(_ decision: HookDecision, request: HookDecisionRequest) -> [String]? {
             switch decision {
             case let .answerChoice(id):
                 return request.choices.first(where: { $0.id == id }).map { [$0.label] }

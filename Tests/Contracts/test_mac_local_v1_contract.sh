@@ -19,7 +19,7 @@ app_shell='Apps/macOS/AgentControlMacApp.swift'
 test -f Apps/macOS/ControlCenterWindowController.swift
 test -f Apps/macOS/MacLocalSettingsView.swift
 grep -q 'MenuBarExtra' "$app_shell"
-grep -q 'Settings {' "$app_shell"
+grep -q 'MacSettingsWindowController' "$app_shell"
 grep -q 'menu.openControlCenter' "$app_shell"
 grep -q 'menu.settings' "$app_shell"
 grep -q 'settings.sound.on' "$app_shell"

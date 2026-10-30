@@ -5,6 +5,7 @@
     import AgentPersistence
     import Foundation
     import Observation
+    import OSLog
 
     public enum DashboardSection: String, CaseIterable, Identifiable, Sendable {
         case overview
@@ -118,7 +119,7 @@
         public var isPanelExpanded = false
 
         public var activeSessions: [SessionListItem] {
-            sessions.filter { !$0.state.isTerminal }
+            sessions.filter { !$0.state.isTerminal && ![.stale, .disconnected, .paused, .discovered].contains($0.state) }
         }
 
         /// Sessions that have produced a provider event recently enough to still be live.
@@ -152,13 +153,10 @@
             at referenceDate: Date = Date(),
             staleAfter: TimeInterval = SessionUsageMetric.defaultStaleAfter
         ) -> SessionUsagePresentation {
-            let session: SessionListItem? = if let selectedSessionID {
-                sessions.first { $0.id == selectedSessionID }
-            } else {
-                activeSessions.max { $0.lastMeaningfulEventAt < $1.lastMeaningfulEventAt }
-            }
-            return SessionUsagePresentation(session: session, at: referenceDate, staleAfter: staleAfter)
+            SessionUsagePresentation(accountMetric: codexAccountUsage, at: referenceDate, staleAfter: staleAfter)
         }
+
+        public var codexAccountUsage: SessionUsageMetric?
 
         private let transport: any AgentControlTransport
         private let notificationCoordinator: MacNotificationCoordinator?
@@ -167,6 +165,7 @@
         private let refreshInterval: Duration
         private var refreshTask: Task<Void, Never>?
         private var notificationTask: Task<Void, Never>?
+        private var refreshGeneration = 0
 
         public init(
             transport: any AgentControlTransport = XPCAgentControlTransport(),
@@ -244,8 +243,11 @@
         #endif
 
         public func refreshNow() async {
+            refreshGeneration += 1
+            let generation = refreshGeneration
             do {
                 let snapshot = try await transport.snapshot(sessionLimit: 1000)
+                guard generation == refreshGeneration, !Task.isCancelled else { return }
                 helperHealth = snapshot.health
                 sessions = snapshot.sessions
                 reconcileStopFeedback()
@@ -265,6 +267,7 @@
             } catch is CancellationError {
                 return
             } catch {
+                guard generation == refreshGeneration, !Task.isCancelled else { return }
                 connectionState = sessions.isEmpty && pendingDecisions.isEmpty
                     ? .error(Self.safeMessage(error))
                     : .offline
@@ -273,6 +276,8 @@
 
         public func selectSession(_ id: SessionID?) {
             selectedSessionID = id
+            selectedSession = nil
+            selectedEvents = []
             guard let id else {
                 selectedSession = nil
                 selectedEvents = []
@@ -283,31 +288,50 @@
 
         public func stopAvailability(for session: SessionListItem, at date: Date = Date()) -> SessionStopAvailability {
             guard !session.state.isTerminal else { return .exactTargetUnavailable }
+            if session.adapterID.rawValue == "codex", session.terminalContext == nil {
+                return CodexDesktopControl().isAvailable ? .available : .codexConnectionRequired
+            }
             return terminalStopper.availability(for: session.terminalContext, at: date)
         }
 
         @discardableResult
         public func openChat(sessionID: SessionID) async -> Bool {
             selectedSessionID = sessionID
+            selectedSession = nil
+            selectedEvents = []
             await loadSession(id: sessionID)
-            guard let session = selectedSession else { return false }
+            guard selectedSessionID == sessionID, let session = selectedSession, session.id == sessionID else { return false }
             pendingNavigationToken = session.terminalContext?.correlationToken
-            let result = await navigator.navigateExact(context: session.terminalContext)
+            let result = if session.adapterID.rawValue == "codex", session.terminalContext == nil,
+                            let threadID = session.externalSessionID {
+                await navigator.navigateCodex(threadID: threadID)
+            } else {
+                await navigator.navigateExact(context: session.terminalContext)
+            }
             lastNavigationResult = result
-            return result.level == .exactPane || result.mechanism == "extension-dispatched"
+            return result.level == .exactPane || result.mechanism == "extension-dispatched" || result.mechanism == "codex-dispatched"
         }
 
         public func stopSession(_ session: SessionListItem) async {
+            let logger = Logger(subsystem: "com.yusuf.agentcontrol.mac", category: "SessionStop")
+            logger.notice("Stop confirmed for session \(session.id.description, privacy: .public)")
             guard sessionStopFeedback[session.id] != .sending,
                   sessionStopFeedback[session.id] != .signalSent
             else { return }
             let availability = stopAvailability(for: session)
             guard availability == .available else {
+                logger.notice("Stop unavailable: \(String(describing: availability), privacy: .public)")
                 sessionStopFeedback[session.id] = .unavailable(availability)
                 return
             }
             sessionStopFeedback[session.id] = .sending
-            switch await terminalStopper.stop(context: session.terminalContext) {
+            let result: SessionStopResult = if session.adapterID.rawValue == "codex", session.terminalContext == nil {
+                await (try? transport.interruptCodexSession(id: session.id)) == true ? .signalSent : .failed
+            } else {
+                await terminalStopper.stop(context: session.terminalContext)
+            }
+            logger.notice("Stop result for \(session.id.description, privacy: .public): \(String(describing: result), privacy: .public)")
+            switch result {
             case .signalSent:
                 sessionStopFeedback[session.id] = .signalSent
                 Task { [weak self] in
@@ -457,15 +481,18 @@
         public func navigate(to session: AgentSession) {
             pendingNavigationToken = session.terminalContext?.correlationToken
             Task { [weak self, navigator] in
-                let result = await navigator.navigate(
-                    context: session.terminalContext,
-                    projectURL: session.project.rootURL
-                )
+                let result = if session.adapterID.rawValue == "codex", session.terminalContext == nil,
+                                let threadID = session.externalSessionID {
+                    await navigator.navigateCodex(threadID: threadID)
+                } else {
+                    await navigator.navigate(context: session.terminalContext, projectURL: session.project.rootURL)
+                }
                 self?.lastNavigationResult = result
             }
         }
 
         public func handleNavigationCallback(_ url: URL) {
+            terminalStopper.handleCallback(url)
             guard let scheme = url.scheme?.lowercased(), ["agentcontrol", "yusufiwt"].contains(scheme),
                   url.host == "navigation-result",
                   let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -706,9 +733,14 @@
             do {
                 async let session = transport.session(id: id)
                 async let events = transport.events(sessionID: id, limit: 500)
-                selectedSession = try await session
-                selectedEvents = try await events
+                let result = try await (session, events)
+                guard selectedSessionID == id else { return }
+                selectedSession = result.0
+                selectedEvents = result.1
             } catch {
+                guard selectedSessionID == id else { return }
+                selectedSession = nil
+                selectedEvents = []
                 if sessions.isEmpty {
                     connectionState = .error(Self.safeMessage(error))
                 }

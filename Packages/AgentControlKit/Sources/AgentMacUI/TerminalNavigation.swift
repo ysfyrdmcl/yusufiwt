@@ -225,9 +225,14 @@
     public protocol TerminalNavigating: AnyObject {
         func navigate(context: TerminalContext?, projectURL: URL?) async -> NavigationResult
         func navigateExact(context: TerminalContext?) async -> NavigationResult
+        func navigateCodex(threadID: String) async -> NavigationResult
     }
 
     public extension TerminalNavigating {
+        func navigateCodex(threadID _: String) async -> NavigationResult {
+            NavigationResult(level: .unsupported, applicationBundleID: nil, mechanism: "codex-unavailable")
+        }
+
         func navigateExact(context: TerminalContext?) async -> NavigationResult {
             await navigate(context: context, projectURL: nil)
         }
@@ -252,6 +257,16 @@
 
         public func navigateExact(context: TerminalContext?) async -> NavigationResult {
             await navigate(context: context, projectURL: nil, exactOnly: true)
+        }
+
+        public func navigateCodex(threadID: String) async -> NavigationResult {
+            guard UUID(uuidString: threadID) != nil,
+                  let url = URL(string: "codex://threads/\(threadID)"),
+                  NSWorkspace.shared.urlForApplication(toOpen: url) != nil,
+                  NSWorkspace.shared.open(url) else {
+                return NavigationResult(level: .unsupported, applicationBundleID: nil, mechanism: "codex-unavailable")
+            }
+            return NavigationResult(level: .application, applicationBundleID: nil, mechanism: "codex-dispatched")
         }
 
         private func navigate(

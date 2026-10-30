@@ -46,6 +46,13 @@ public struct SessionAggregate: Sendable {
         session.snapshotRevision += 1
     }
 
+    public mutating func updateTerminalContext(_ context: TerminalContext?) {
+        guard let context, context.capturedAt >= (session.terminalContext?.capturedAt ?? .distantPast),
+              context != session.terminalContext else { return }
+        session.terminalContext = context
+        session.snapshotRevision += 1
+    }
+
     private func validateOrdering(_ event: SequencedAgentEvent) -> EventApplicationResult? {
         if processedEventIDs.contains(event.id) {
             return .duplicate

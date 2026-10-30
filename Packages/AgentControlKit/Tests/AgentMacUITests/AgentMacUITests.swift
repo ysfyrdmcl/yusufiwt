@@ -107,7 +107,21 @@ struct AgentMacUITests {
         #expect(store.sessionStopFeedback[session.id] == .signalSent)
     }
 
-    @Test("Usage follows the selected session or the latest active session")
+    @Test("A failed chat load never navigates to the previously selected agent")
+    @MainActor
+    func failedChatLoadClearsSelection() async {
+        let sessions = Self.sessions(count: 2)
+        let transport = FixtureUITransport(sessions: sessions)
+        let navigator = FixtureExactNavigator(result: NavigationResult(level: .exactPane, applicationBundleID: nil, mechanism: "fixture"))
+        let store = AgentControlStore(transport: transport, navigator: navigator)
+        #expect(await store.openChat(sessionID: sessions[0].id))
+        await transport.setOnline(false)
+        #expect(await store.openChat(sessionID: sessions[1].id) == false)
+        #expect(store.selectedSession == nil)
+        #expect(navigator.exactCalls == 1)
+    }
+
+    @Test("Account usage is independent of selection and rows show context")
     @MainActor
     func usageSessionSelection() async {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
@@ -135,17 +149,24 @@ struct AgentMacUITests {
             transport: FixtureUITransport(sessions: [first, latest]), refreshInterval: .seconds(60)
         )
         await store.refreshNow()
-        #expect(store.usagePresentation(at: now).value == "75%")
-        #expect(store.usagePresentation(at: now).sourceLabel == "Claude · Latest")
-
-        store.selectSession(firstID)
-        #expect(store.usagePresentation(at: now).value == "73%")
-        #expect(store.usagePresentation(at: now).titleKey == "usage.weeklyLimit")
-        #expect(SessionUsagePresentation(session: first, at: now.addingTimeInterval(301)).isStale)
-        #expect(SessionUsagePresentation(session: SessionListItem(
-            id: SessionID(UUID()), projectName: "No usage", adapterID: AdapterID("codex"),
-            state: .running, startedAt: now, lastMeaningfulEventAt: now, snapshotRevision: 0
-        ), at: now).value == "data unavailable")
+        store.codexAccountUsage = first.usageMetrics.first
+        #expect(store.usagePresentation(at: now).value == "27%")
+        #expect(store.usagePresentation(at: now).sourceLabel == "Codex")
+        store.selectSession(latestID)
+        #expect(store.usagePresentation(at: now).value == "27%")
+        #expect(store.usagePresentation(at: now).titleKey == "usage.weeklyUsed")
+        #expect(!SessionUsagePresentation(session: first, at: now).isAvailable)
+        let context = SessionListItem(
+            id: firstID, projectName: "Context", adapterID: AdapterID("codex"), state: .running,
+            startedAt: now, lastMeaningfulEventAt: now, snapshotRevision: 2,
+            usageMetrics: first.usageMetrics + [.init(
+                provider: AdapterID("codex"), kind: .contextRemaining, total: 1000, used: 420,
+                source: "fixture", updatedAt: now
+            )]
+        )
+        #expect(SessionUsagePresentation(session: context, at: now).value == "42%")
+        #expect(SessionUsagePresentation(session: context, at: now).titleKey == "usage.contextUsed")
+        #expect(SessionUsagePresentation(session: context, at: now.addingTimeInterval(301)).isStale)
     }
 
     @Test("Registry notification refreshes structured usage without waiting for polling")
@@ -585,6 +606,7 @@ private actor FixtureUITransport: AgentControlTransport {
     }
 
     func session(id: SessionID) async throws -> AgentSession? {
+        guard online else { throw LocalIPCError.unavailable }
         guard let item = sessionItems.first(where: { $0.id == id }) else { return nil }
         return AgentSession(
             id: item.id, nodeID: NodeID(UUID()), adapterID: item.adapterID, externalSessionID: "fixture",
@@ -637,6 +659,11 @@ private final class FixtureExactNavigator: TerminalNavigating {
     }
 
     func navigateExact(context _: TerminalContext?) async -> NavigationResult {
+        exactCalls += 1
+        return result
+    }
+
+    func navigateCodex(threadID _: String) async -> NavigationResult {
         exactCalls += 1
         return result
     }

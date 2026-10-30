@@ -85,7 +85,7 @@ public struct AgentSession: Codable, Sendable, Identifiable, Equatable {
     public let adapterID: AdapterID
     public let externalSessionID: String?
     public let project: ProjectReference
-    public let terminalContext: TerminalContext?
+    public var terminalContext: TerminalContext?
     public let parentSessionID: SessionID?
     public var state: SessionState
     public var startedAt: Date

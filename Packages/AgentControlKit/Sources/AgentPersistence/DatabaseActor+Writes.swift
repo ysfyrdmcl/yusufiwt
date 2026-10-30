@@ -163,7 +163,10 @@ extension DatabaseActor {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 provider_session_id = excluded.provider_session_id,
-                adapter_version = excluded.adapter_version,
+                adapter_version = CASE
+                    WHEN excluded.adapter_version = 'liveness-v1'
+                        OR (excluded.adapter_version = 'transcript-v1' AND agent_sessions.adapter_version != 'transcript-v1')
+                    THEN agent_sessions.adapter_version ELSE excluded.adapter_version END,
                 state = excluded.state,
                 ended_at = excluded.ended_at,
                 last_meaningful_event_at = excluded.last_meaningful_event_at,

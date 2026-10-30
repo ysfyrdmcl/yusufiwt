@@ -5,7 +5,8 @@
 - A notch-first native macOS shell: the helper and menu bar start at launch, while the full Control Center opens only after an explicit user action.
 - A focused Control Center for integrations, automation/rules, history/analytics and privacy/diagnostics, plus native persisted Settings for language, notification/sound and panel behavior.
 - Managed local hooks for Codex, Claude Code, Gemini CLI and Cursor. Cursor session, scoped `preToolUse` write/delete/task decisions, shell/MCP decisions and context-compaction events use its official hook contract; Cursor Agent questions and plan-review waiting remain explicitly unsupported because that contract does not expose them.
-- Monitor-only Codex and Claude Code session discovery from their local structured JSONL transcript metadata when hooks are absent; prompt and output content is not persisted, and structured hook/app-server events remain authoritative.
+- Codex and Claude Code session discovery from local structured JSONL transcripts; message content is not persisted. Codex lifecycle markers distinguish running/completed/cancelled from uncertain silence. Existing structured hook/app-server events remain authoritative.
+- Codex desktop task navigation and optional stop requests through a local relay of its original stdio process. The helper never starts a new generation or exposes a network listener. Desktop processes launched without the relay remain monitor-only until restarted with the supplied launcher.
 - Helper-owned Unix socket, SQLite persistence, XPC read model, decisions, rules, diagnostics, retention and local notifications.
 - Preview-first managed hook install/repair/uninstall and terminal/IDE navigation.
 - Development or ad-hoc local packaging with explicit signing evidence.

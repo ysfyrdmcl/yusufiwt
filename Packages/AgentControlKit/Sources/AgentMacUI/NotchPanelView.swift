@@ -37,6 +37,7 @@
                     .stroke(Color.white.opacity(0.1))
             }
             .environment(\.colorScheme, .dark)
+            .environment(\.locale, coordinator.applicationPreferences.language.locale)
             .animation(reduceMotion ? nil : .snappy(duration: 0.24), value: coordinator.mode)
         }
 
@@ -228,7 +229,7 @@
                 }
                 .accessibilityIdentifier("notch.openControlCenter")
 
-                SettingsLink {
+                Button(action: coordinator.openSettings) {
                     Label("menu.settings", systemImage: "gearshape")
                 }
                 .accessibilityIdentifier("notch.openSettings")

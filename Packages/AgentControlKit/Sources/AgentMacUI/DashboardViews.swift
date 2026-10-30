@@ -54,9 +54,9 @@
 
         @ViewBuilder
         private var dashboardContent: some View {
-            if case .loading = store.connectionState, store.sessions.isEmpty {
+            if case .loading = store.connectionState, store.sessions.isEmpty, store.selectedSection != .integrations {
                 LoadingStateView()
-            } else if case let .error(message) = store.connectionState, store.sessions.isEmpty {
+            } else if case let .error(message) = store.connectionState, store.sessions.isEmpty, store.selectedSection != .integrations {
                 ErrorStateView(message: message) { await store.refreshNow() }
             } else {
                 switch store.selectedSection {
@@ -243,7 +243,7 @@
                             Button("action.openTerminal") { store.navigate(to: session) }
                             if let result = store.lastNavigationResult {
                                 Label(
-                                    "navigation.result.\(result.level.rawValue)",
+                                    LocalizedStringKey("navigation.result." + result.level.rawValue),
                                     systemImage: result.level >= .window ? "scope" : "arrow.up.forward.app"
                                 )
                                 .font(.caption)

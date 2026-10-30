@@ -31,22 +31,23 @@
         }
 
         var titleKey: LocalizedStringKey {
-            LocalizedStringKey("controlCenter.history.\(rawValue)")
+            LocalizedStringKey("controlCenter.history." + rawValue)
         }
     }
 
     struct HistoryAnalyticsControlCenterView: View {
         @Bindable var store: AgentControlStore
-        @State private var mode: HistoryAnalyticsMode
+        private var mode: HistoryAnalyticsMode {
+            store.selectedSection == .analytics ? .analytics : .history
+        }
 
-        init(store: AgentControlStore) {
-            self.store = store
-            _mode = State(initialValue: store.selectedSection == .analytics ? .analytics : .history)
+        private var modeSelection: Binding<HistoryAnalyticsMode> {
+            Binding(get: { mode }, set: { store.selectedSection = $0.section })
         }
 
         var body: some View {
             VStack(spacing: 0) {
-                Picker("controlCenter.history.mode", selection: $mode) {
+                Picker("controlCenter.history.mode", selection: modeSelection) {
                     ForEach(HistoryAnalyticsMode.allCases) { mode in
                         Text(mode.titleKey).tag(mode)
                     }
@@ -63,13 +64,6 @@
                     AnalyticsView(store: store)
                 }
             }
-            .task { await select(mode) }
-            .onChange(of: mode) { _, value in Task { await select(value) } }
-        }
-
-        private func select(_ value: HistoryAnalyticsMode) async {
-            store.selectedSection = value.section
-            await store.refreshSelectedOperations()
         }
     }
 
@@ -86,22 +80,23 @@
         }
 
         var titleKey: LocalizedStringKey {
-            LocalizedStringKey("controlCenter.safety.\(rawValue)")
+            LocalizedStringKey("controlCenter.safety." + rawValue)
         }
     }
 
     struct PrivacyDiagnosticsControlCenterView: View {
         @Bindable var store: AgentControlStore
-        @State private var mode: PrivacyDiagnosticsMode
+        private var mode: PrivacyDiagnosticsMode {
+            store.selectedSection == .privacy ? .privacy : .diagnostics
+        }
 
-        init(store: AgentControlStore) {
-            self.store = store
-            _mode = State(initialValue: store.selectedSection == .privacy ? .privacy : .diagnostics)
+        private var modeSelection: Binding<PrivacyDiagnosticsMode> {
+            Binding(get: { mode }, set: { store.selectedSection = $0.section })
         }
 
         var body: some View {
             VStack(spacing: 0) {
-                Picker("controlCenter.safety.mode", selection: $mode) {
+                Picker("controlCenter.safety.mode", selection: modeSelection) {
                     ForEach(PrivacyDiagnosticsMode.allCases) { mode in
                         Text(mode.titleKey).tag(mode)
                     }
@@ -118,13 +113,6 @@
                     DiagnosticsView(store: store)
                 }
             }
-            .task { await select(mode) }
-            .onChange(of: mode) { _, value in Task { await select(value) } }
-        }
-
-        private func select(_ value: PrivacyDiagnosticsMode) async {
-            store.selectedSection = value.section
-            await store.refreshSelectedOperations()
         }
     }
 #endif

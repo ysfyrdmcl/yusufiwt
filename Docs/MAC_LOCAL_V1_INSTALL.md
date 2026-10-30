@@ -14,10 +14,13 @@ package-mac-local`. Artifacts are written under `dist/`.
 ## Install
 
 1. Extract `yusufiwt-macOS-local-v1.zip`.
-2. In Terminal, run `./install_mac_local.sh` from the extracted folder.
-3. Complete notification/background-item approval if macOS requests it.
-4. Confirm health from the repository with `make verify-mac-local-v1`, or run:
-   `/Applications/yusufiwt.app/Contents/MacOS/agentcontrol-hook doctor`
+2. Move `yusufiwt.app` to Applications and open it.
+3. Allow background activity/notifications when macOS requests them.
+4. If Codex is already open without a control connection, approve the in-app
+   reopen prompt after finishing ongoing work. yusufiwt handles the restart.
+
+No Terminal command is required. The included installer remains an optional
+alternative for scripted installation.
 
 For an ad-hoc artifact, Gatekeeper may require the user-controlled Finder path
 **Control-click → Open** on first launch. The installer never removes quarantine
@@ -30,18 +33,38 @@ Developer ID builds use the in-app ServiceManagement registration path.
 
 ## Provider hooks
 
-Preview before changing any configuration:
-
-```sh
-/Applications/yusufiwt.app/Contents/MacOS/agentcontrol-hook managed-preview codex
-/Applications/yusufiwt.app/Contents/MacOS/agentcontrol-hook managed-install codex
-```
-
-Replace `codex` with `claude`, `gemini`, or `cursor`. Installation is atomic, backs up the
-original, and changes only yusufiwt-managed entries. Use `managed-repair` or
-`managed-uninstall` with the same provider name for recovery.
+Open Control Center → Integrations to install or repair managed provider hooks.
+The app previews configuration changes, backs up the original, and changes only
+its managed entries. Codex transcript monitoring and account usage work without
+installing hooks.
 
 ## Upgrade
+
+### Codex desktop task control
+
+The default desktop process may use private stdio, which cannot be attached to
+by another app. Monitoring and opening `codex://threads/<id>` work without a
+control connection. To enable stopping through the desktop relay:
+
+Open yusufiwt. It starts Codex with the bundled relay automatically when Codex
+is closed. If Codex is already running without the relay, an in-app prompt asks
+to reopen it; yusufiwt performs the graceful restart and verifies the connection.
+It never force-quits Codex. Declining keeps monitoring available.
+
+The environment applies only to that Codex launch. No global environment or
+credentials are changed. The relay uses the
+[official `turn/interrupt` protocol](https://learn.chatgpt.com/docs/app-server).
+An acknowledgment is separate from confirmed task completion.
+
+The header reads the connected Codex account's weekly used percentage through
+`account/rateLimits/read` once per minute, even with no active tasks. Each row
+shows context used from that conversation's latest token usage and context
+window, independently of account quota. Missing values are never shown as zero.
+Idle/unknown records are excluded from working counts; abandoned running
+transcripts become stale after five minutes without writes. Persisted working
+records without new events expire after twenty minutes, preserving history.
+
+### Replace the installed build
 
 Run the new archive's `install_mac_local.sh`. Installation stages and verifies
 the replacement before swapping it into `/Applications`. Local history and

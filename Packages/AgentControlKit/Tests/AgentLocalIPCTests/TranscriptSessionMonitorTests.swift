@@ -6,6 +6,101 @@ import Testing
 
 @Suite("Transcript session fallback")
 struct TranscriptSessionMonitorTests {
+    @Test("Transcript silence is stale, never an invented completion")
+    func silenceIsNotCompletion() async throws {
+        let fixture = try TranscriptFixture()
+        let file = fixture.codexRoot.appendingPathComponent("silent.jsonl")
+        try fixture.write(#"{"type":"session_meta","payload":{"id":"silent","cwd":"/private/tmp/Silent"}}"#, to: file)
+        let observation = try #require(fixture.scanner.scan(at: fixture.now).first)
+        let stack = try await makeTestRuntime(paths: temporaryPaths())
+        let monitor = TranscriptSessionMonitor(runtime: stack.runtime, scanner: fixture.scanner)
+        await monitor.poll(at: fixture.now)
+        #expect(await stack.registry.session(id: observation.sessionID)?.state == .stale)
+        await monitor.poll(at: fixture.now.addingTimeInterval(21))
+        #expect(await stack.registry.session(id: observation.sessionID)?.state == .stale)
+        #expect(await stack.registry.session(id: observation.sessionID)?.endedAt == nil)
+        await stack.runtime.gracefulShutdown()
+    }
+
+    @Test("Codex lifecycle markers and fresh writes drive live state")
+    func codexLifecycle() async throws {
+        let fixture = try TranscriptFixture()
+        let file = fixture.codexRoot.appendingPathComponent("lifecycle.jsonl")
+        let header = #"{"type":"session_meta","payload":{"id":"live","cwd":"/private/tmp/Live"}}"#
+        let started = #"{"type":"event_msg","payload":{"type":"task_started"}}"#
+        try fixture.write(header + "\n" + started, to: file)
+        let observation = try #require(fixture.scanner.scan(at: fixture.now).first)
+        let stack = try await makeTestRuntime(paths: temporaryPaths())
+        let monitor = TranscriptSessionMonitor(runtime: stack.runtime, scanner: fixture.scanner)
+        await monitor.poll(at: fixture.now)
+        await monitor.poll(at: fixture.now.addingTimeInterval(30))
+        #expect(await stack.registry.session(id: observation.sessionID)?.state == .running)
+        try FileManager.default.setAttributes([.modificationDate: fixture.now.addingTimeInterval(40)], ofItemAtPath: file.path)
+        await monitor.poll(at: fixture.now.addingTimeInterval(40))
+        #expect(await stack.registry.session(id: observation.sessionID)?.lastMeaningfulEventAt == fixture.now.addingTimeInterval(40))
+        try fixture.write(header + "\n" + started + "\n" + #"{"type":"event_msg","payload":{"type":"task_complete"}}"#, to: file)
+        try FileManager.default.setAttributes([.modificationDate: fixture.now.addingTimeInterval(50)], ofItemAtPath: file.path)
+        await monitor.poll(at: fixture.now.addingTimeInterval(50))
+        #expect(await stack.registry.session(id: observation.sessionID)?.state == .completed)
+        try fixture.write(header + "\n" + started, to: file)
+        try FileManager.default.setAttributes([.modificationDate: fixture.now.addingTimeInterval(60)], ofItemAtPath: file.path)
+        await monitor.poll(at: fixture.now.addingTimeInterval(60))
+        await monitor.poll(at: fixture.now.addingTimeInterval(361))
+        #expect(await stack.registry.session(id: observation.sessionID)?.state == .stale)
+        await stack.runtime.gracefulShutdown()
+    }
+
+    @Test("Abandoned persisted work becomes stale and leaves the active count")
+    func expirePersistedWork() async throws {
+        let fixture = try TranscriptFixture()
+        let file = fixture.codexRoot.appendingPathComponent("abandoned.jsonl")
+        try fixture.write("""
+        {"type":"session_meta","payload":{"id":"abandoned","cwd":"/private/tmp/Abandoned"}}
+        {"type":"event_msg","payload":{"type":"task_started"}}
+        """, to: file)
+        let observation = try #require(fixture.scanner.scan(at: fixture.now).first)
+        let stack = try await makeTestRuntime(paths: temporaryPaths())
+        let monitor = TranscriptSessionMonitor(runtime: stack.runtime, scanner: fixture.scanner)
+        await monitor.poll(at: fixture.now)
+        try await stack.registry.expireInactiveSessions(at: fixture.now.addingTimeInterval(1201))
+        #expect(await stack.registry.activeSessionCount() == 0)
+        #expect(try await stack.database.session(id: observation.sessionID)?.state == .stale)
+        #expect(try await stack.database.sessionAdapterVersion(id: observation.sessionID) == "transcript-v1")
+        await stack.runtime.gracefulShutdown()
+    }
+
+    @Test("Codex context uses the latest request, not cumulative account tokens")
+    func contextUsage() async throws {
+        let fixture = try TranscriptFixture()
+        let file = fixture.codexRoot.appendingPathComponent("usage.jsonl")
+        try fixture.write("""
+        {"type":"session_meta","payload":{"id":"context","cwd":"/private/tmp/Context"}}
+        {"type":"event_msg","payload":{"type":"task_started"}}
+        {"type":"event_msg","timestamp":"2027-01-15T08:00:00.000Z",\
+        "payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":900000},\
+        "last_token_usage":{"total_tokens":25000},"model_context_window":100000}}}
+        """, to: file)
+        let observation = try #require(fixture.scanner.scan(at: fixture.now).first)
+        #expect(observation.usageMetrics.first?.remainingPercent == 75)
+        let stack = try await makeTestRuntime(paths: temporaryPaths())
+        let monitor = TranscriptSessionMonitor(runtime: stack.runtime, scanner: fixture.scanner)
+        await monitor.poll(at: fixture.now)
+        #expect(await stack.registry.session(id: observation.sessionID)?.usageMetrics.first?.remainingPercent == 75)
+        await stack.runtime.gracefulShutdown()
+    }
+
+    @Test("Long active turns remain live when the start marker leaves the bounded tail")
+    func longTurn() throws {
+        let fixture = try TranscriptFixture()
+        let file = fixture.codexRoot.appendingPathComponent("long.jsonl")
+        let header = #"{"type":"session_meta","payload":{"id":"long","cwd":"/private/tmp/Long"}}"#
+        let started = #"{"type":"event_msg","payload":{"type":"task_started"}}"#
+        let padding = String(repeating: #"{"type":"response_item","payload":{}}"# + "\n", count: 9000)
+        let activity = #"{"type":"event_msg","payload":{"type":"token_count"}}"#
+        try fixture.write(header + "\n" + started + "\n" + padding + activity, to: file)
+        #expect(fixture.scanner.scan(at: fixture.now).first?.observedState == .running)
+    }
+
     @Test("Codex transcripts expose project and parent session metadata")
     func codexDiscovery() throws {
         let fixture = try TranscriptFixture()
